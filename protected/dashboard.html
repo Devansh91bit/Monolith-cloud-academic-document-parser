@@ -1,126 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Student Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dashboard.css">
-</head>
-<body>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Monolith | User Dashboard</title>
 
-<header class="app-header">
-  <div class="banner-placeholder">Application banner goes here</div>
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body id="top">
+
+<!-- ================= DASHBOARD HEADER ================= -->
+<header class="dash-header">
+    <nav class="dash-nav">
+        <a href="#top" class="dash-logo">
+            <i class="fa-solid fa-graduation-cap"></i> MONOLITH
+        </a>
+
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle Navigation">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <div class="dash-nav-container" id="navContainer">
+            <ul class="dash-nav-links">
+                <li><a href="#deadlines"><i class="fa-solid fa-clock"></i> Deadlines</a></li>
+                <li><a href="#courses"><i class="fa-solid fa-book"></i> My Courses</a></li>
+                <li><a href="#documents"><i class="fa-solid fa-folder"></i> My Documents</a></li>
+            </ul>
+
+            <div class="dash-nav-actions">
+                <button class="btn-logout" id="logoutBtn">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
 </header>
 
-<div class="wrap">
+<main class="dash-container">
 
-  <section class="hero">
-    <p class="today-line" id="todayLine"></p>
-    <div class="greeting-row">
-      <h1><span id="greetingText">Hello, <span id="usernameDisplay">Student</span></span></h1>
-      <button class="edit-name-btn" id="editNameBtn" aria-label="Edit your name" title="Edit your name">&#9998;</button>
+    <!-- ================= GREETING HERO ================= -->
+    <section class="dash-welcome" id="welcome">
+        <div class="greeting-row">
+            <h1>Hello, <span id="usernameDisplay"></span> 👋</h1>
+            <button class="edit-name-btn" id="editNameBtn" title="Edit Display Name"><i class="fa-solid fa-pen"></i></button>
+        </div>
+    </section>
+
+    <!-- ================= GLOBAL ACTION BAR ================= -->
+    <section class="dash-action-bar">
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="globalSearchInput" placeholder="Search deadlines, courses, or uploaded files...">
+        </div>
+        <div class="action-buttons">
+            <button class="btn-secondary-outline" id="openCourseModalBtn"><i class="fa-solid fa-plus"></i> Add Course</button>
+            <button class="btn-primary" id="openUploadModalBtn"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+        </div>
+    </section>
+
+    <!-- ================= SECTION 1: DEADLINES (TOP PRIORITY) ================= -->
+    <section class="dash-section" id="deadlines">
+        <div class="section-header">
+            <h2><i class="fa-solid fa-clock"></i> Upcoming Deadlines</h2>
+            <button class="btn-text-action" id="createDeadlineModalBtn">+ Quick Add Task</button>
+        </div>
+
+        <ul class="item-list" id="deadlineList"></ul>
+        <div class="empty-state hidden" id="deadlinesEmpty">
+            <i class="fa-solid fa-calendar-check"></i>
+            <p>No active deadlines found. Upload a syllabus or manually add a deadline to populate this timeline.</p>
+        </div>
+    </section>
+
+    <!-- ================= SECTION 2: MY COURSES ================= -->
+    <section class="dash-section" id="courses">
+        <div class="section-header">
+            <h2><i class="fa-solid fa-book"></i> My Courses</h2>
+            <button class="btn-text-action" id="openCourseHeaderBtn">+ Add Course</button>
+        </div>
+
+        <div class="course-grid" id="courseList"></div>
+        <div class="empty-state hidden" id="coursesEmpty">
+            <i class="fa-solid fa-folder-plus"></i>
+            <p>No active courses added yet. Click "Add Course" above to organize your documents.</p>
+        </div>
+    </section>
+
+    <!-- ================= SECTION 3: MY DOCUMENTS ================= -->
+    <section class="dash-section" id="documents">
+        <div class="section-header">
+            <h2><i class="fa-solid fa-folder-open"></i> My Documents</h2>
+            <button class="btn-text-action" id="openUploadHeaderBtn">+ Upload Document</button>
+        </div>
+
+        <ul class="item-list" id="docList"></ul>
+        <div class="empty-state hidden" id="docsEmpty">
+            <i class="fa-solid fa-file-arrow-up"></i>
+            <p>No syllabus files uploaded yet. Drag & drop or click "Upload Document" to begin parsing.</p>
+        </div>
+    </section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer class="dash-footer">
+    <div class="footer-inner">
+        <div class="footer-left">
+            <a href="#top" class="footer-link"><i class="fa-solid fa-arrow-up"></i> Back to Top</a>
+            <a href="mailto:support@monolith.com" class="footer-link"><i class="fa-solid fa-envelope"></i> Contact Us</a>
+            <a href="#feedback" class="footer-link" id="feedbackBtn"><i class="fa-solid fa-comment-dots"></i> Feedback</a>
+        </div>
+        <div class="footer-right">
+            <p>© 2026 Monolith Systems</p>
+        </div>
     </div>
-    <div class="hero-rule"></div>
-  </section>
-
-  <section class="actions-section">
-    <button class="btn" id="openCourseModalBtn">Add course</button>
-    <button class="btn btn-outline" id="openUploadModalBtn">Upload documents</button>
-  </section>
-
-  <div class="section-block">
-    <h2>Deadlines</h2>
-    <ul class="item-list" id="deadlineList"></ul>
-    <p class="empty-state hidden" id="deadlinesEmpty">Nothing due yet. Add a course with a deadline to see it here.</p>
-  </div>
-
-  <div class="section-block">
-    <h2>Courses</h2>
-    <ul class="item-list" id="courseList"></ul>
-    <p class="empty-state hidden" id="coursesEmpty">No courses yet. Click &ldquo;Add course&rdquo; to get started.</p>
-  </div>
-
-  <div class="section-block">
-    <h2>Documents</h2>
-    <ul class="item-list" id="docList"></ul>
-    <p class="empty-state hidden" id="docsEmpty">No files yet. Click &ldquo;Upload documents&rdquo; to add one.</p>
-  </div>
-
-</div>
-
-<footer class="app-footer">
-  <div class="footer-inner">
-    <span>&copy; 2026 Your Application</span>
-    <div class="footer-links">
-      <a href="mailto:support@example.com">Contact us</a>
-      <a href="#" id="feedbackLink">Feedback</a>
-    </div>
-  </div>
 </footer>
 
-<!-- Add Course Modal -->
-<div class="modal-overlay" id="courseModalOverlay">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="courseModalTitle">
-    <h3 id="courseModalTitle">Add a course</h3>
-    <form id="courseForm">
-      <div class="field">
-        <label for="courseName">Course name</label>
-        <input type="text" id="courseName" placeholder="e.g. Introduction to Psychology" required>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="courseCode">Course code</label>
-          <input type="text" id="courseCode" placeholder="e.g. PSY 101">
-        </div>
-        <div class="field">
-          <label for="courseInstructor">Instructor</label>
-          <input type="text" id="courseInstructor" placeholder="e.g. Dr. Foster">
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="deadlineTitle">Deadline title (optional)</label>
-          <input type="text" id="deadlineTitle" placeholder="e.g. Essay draft">
-        </div>
-        <div class="field">
-          <label for="deadlineDate">Due date</label>
-          <input type="date" id="deadlineDate">
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-plain" id="cancelCourseBtn">Cancel</button>
-        <button type="submit" class="btn">Add course</button>
-      </div>
-    </form>
-  </div>
+<!-- ================= MODAL: ADD COURSE ================= -->
+<div class="modal-overlay" id="courseModalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="courseModalTitle">
+        <h3 id="courseModalTitle"><i class="fa-solid fa-book"></i> Add New Course</h3>
+        <form id="courseForm">
+            <div class="field">
+                <label for="courseName">Course Title</label>
+                <input type="text" id="courseName" placeholder="e.g. Operating Systems" required>
+            </div>
+            <div class="field-row">
+                <div class="field">
+                    <label for="courseCode">Course Code</label>
+                    <input type="text" id="courseCode" placeholder="e.g. CS 301" required>
+                </div>
+                <div class="field">
+                    <label for="courseInstructor">Instructor</label>
+                    <input type="text" id="courseInstructor" placeholder="e.g. Dr. Smith">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-plain" id="cancelCourseBtn">Cancel</button>
+                <button type="submit" class="btn-primary">Save Course</button>
+            </div>
+        </form>
+    </div>
 </div>
 
-<!-- Upload Documents Modal -->
-<div class="modal-overlay" id="uploadModalOverlay">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uploadModalTitle">
-    <h3 id="uploadModalTitle">Upload documents</h3>
-    <div class="field">
-      <label for="courseSelect">Attach to a course (optional)</label>
-      <select id="courseSelect"><option value="">No course</option></select>
+<!-- ================= MODAL: UPLOAD DOCUMENT ================= -->
+<div class="modal-overlay" id="uploadModalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="uploadModalTitle">
+        <h3 id="uploadModalTitle"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document to Monolith</h3>
+        <form id="uploadForm">
+            <div class="field">
+                <label for="courseSelect">Attach to Course (Optional)</label>
+                <select id="courseSelect"><option value="">-- Select Course --</option></select>
+            </div>
+            <div class="field">
+                <label>File Target (PDF, DOCX)</label>
+                <button type="button" class="file-picker-btn" id="filePickerBtn">
+                    <i class="fa-solid fa-file-pdf"></i> Select File for R2 Direct Stream
+                </button>
+                <input type="file" id="fileInput" accept=".pdf,.docx,.txt" hidden>
+                <div class="chip-list" id="chipList"></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-plain" id="cancelUploadBtn">Cancel</button>
+                <button type="button" class="btn-primary" id="confirmUploadBtn">Upload & Parse</button>
+            </div>
+        </form>
     </div>
-    <div class="field">
-      <label>Files</label>
-      <button type="button" class="file-picker-btn" id="filePickerBtn">Click to choose files</button>
-      <input type="file" id="fileInput" multiple hidden>
-      <div class="chip-list" id="chipList"></div>
-    </div>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-plain" id="cancelUploadBtn">Cancel</button>
-      <button type="button" class="btn" id="confirmUploadBtn">Upload</button>
-    </div>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-
+<script src="dashboard.js"></script>
 </body>
 </html>
