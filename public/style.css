@@ -1,0 +1,548 @@
+/* =========================
+   Google Font & Global Reset
+========================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    scroll-behavior: smooth;
+}
+
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1e3a8a;
+    --text-dark: #1e293b;
+    --text-muted: #64748b;
+    --bg-light: #f8fafc;
+    --white: #ffffff;
+    --target-tap-size: 44px;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background: var(--bg-light);
+    color: var(--text-dark);
+    line-height: 1.6;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+section {
+    padding: clamp(3rem, 6vw, 6rem) 8%;
+}
+
+h1 {
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 700;
+    color: var(--primary-dark);
+    line-height: 1.25;
+}
+
+h2 {
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    font-weight: 600;
+    text-align: center;
+    color: var(--primary-dark);
+    margin-bottom: 2.5rem;
+}
+
+h3 {
+    font-weight: 600;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+ul {
+    list-style: none;
+}
+
+/* =========================
+    Top Announcement Banner
+========================= */
+.top-banner {
+    background: var(--primary-dark);
+    color: var(--white);
+    text-align: center;
+    padding: 8px 15px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    position: relative;
+    z-index: 1001;
+}
+
+/* =========================
+        Header & Navbar
+========================= */
+header {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    background: var(--white);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    z-index: 1000;
+}
+
+.navbar {
+    width: 90%;
+    max-width: 1200px;
+    margin: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 70px;
+}
+
+.logo {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-container {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+}
+
+.nav-links {
+    display: flex;
+    gap: 25px;
+}
+
+/* Updated Nav Links with Smooth Blue Underline */
+.nav-links a {
+    color: var(--text-dark);
+    font-weight: 500;
+    position: relative;
+    padding-bottom: 4px;
+    transition: color 0.3s ease;
+}
+
+.nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 3px;
+    background-color: var(--primary);
+    border-radius: 2px;
+    transition: width 0.3s ease-in-out;
+}
+
+.nav-links a:hover::after {
+    width: 100%;
+}
+
+.nav-links a:hover {
+    color: var(--text-dark);
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.btn-nav-login {
+    color: var(--primary);
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: 20px;
+    transition: background 0.3s ease;
+}
+
+.btn-nav-login:hover {
+    background: #e0e7ff;
+}
+
+.btn-nav-signup {
+    background: var(--primary);
+    color: var(--white);
+    font-weight: 600;
+    padding: 8px 20px;
+    border-radius: 20px;
+    transition: background 0.3s ease;
+}
+
+.btn-nav-signup:hover {
+    background: #1d4ed8;
+}
+
+.mobile-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-dark);
+    cursor: pointer;
+    min-width: var(--target-tap-size);
+    min-height: var(--target-tap-size);
+}
+
+/* =========================
+        Hero Section
+========================= */
+.hero {
+    min-height: calc(100dvh - 100px);
+    display: flex;
+    align-items: center;
+    background: linear-gradient(180deg, #ffffff 0%, var(--bg-light) 100%);
+}
+
+.hero-container {
+    width: 90%;
+    max-width: 1200px;
+    margin: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 40px;
+}
+
+.hero-text {
+    flex: 1.2;
+}
+
+.hero-text p {
+    font-size: clamp(1rem, 1.8vw, 1.15rem);
+    color: var(--text-muted);
+    margin: 20px 0 30px;
+}
+
+.hero-buttons {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.primary-btn,
+.secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--target-tap-size);
+    padding: 12px 28px;
+    border-radius: 30px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.primary-btn {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.primary-btn:hover {
+    background: #1d4ed8;
+    transform: translateY(-2px);
+}
+
+.secondary-btn {
+    border: 2px solid var(--primary);
+    color: var(--primary);
+}
+
+.secondary-btn:hover {
+    background: var(--primary);
+    color: var(--white);
+    transform: translateY(-2px);
+}
+
+.hero-image {
+    flex: 0.8;
+    display: flex;
+    justify-content: center;
+}
+
+.graphic-card {
+    background: var(--white);
+    padding: 40px 30px;
+    border-radius: 20px;
+    box-shadow: 0 15px 35px rgba(37, 99, 235, 0.1);
+    text-align: center;
+    width: 100%;
+    max-width: 320px;
+}
+
+.hero-icon {
+    font-size: 80px;
+    color: var(--primary);
+    margin-bottom: 15px;
+}
+
+.graphic-card p {
+    font-weight: 600;
+    color: var(--primary-dark);
+}
+
+/* =========================
+   Section 1: Key Features
+========================= */
+.features {
+    background: var(--white);
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 25px;
+    max-width: 1200px;
+    margin: auto;
+}
+
+.feature-card {
+    background: var(--bg-light);
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid #e2e8f0;
+}
+
+.feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+.feature-card i {
+    font-size: 38px;
+    color: var(--primary);
+    margin-bottom: 15px;
+}
+
+.feature-card h3 {
+    font-size: 1.15rem;
+    color: var(--primary-dark);
+    margin-bottom: 10px;
+}
+
+.feature-card p {
+    font-size: 0.92rem;
+    color: var(--text-muted);
+}
+
+/* =========================
+   Section 2: How It Works
+========================= */
+.workflow {
+    background: var(--bg-light);
+}
+
+.workflow-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    max-width: 1100px;
+    margin: auto;
+}
+
+.step {
+    background: var(--white);
+    flex: 1;
+    padding: 30px 20px;
+    border-radius: 16px;
+    text-align: center;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.03);
+}
+
+.number {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 15px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.step h3 {
+    color: var(--primary-dark);
+    margin-bottom: 8px;
+}
+
+.step p {
+    font-size: 0.92rem;
+    color: var(--text-muted);
+}
+
+.step-arrow {
+    color: var(--primary);
+    font-size: 1.2rem;
+}
+
+/* =========================
+   Section 3: What's New
+========================= */
+.whats-new {
+    background: var(--white);
+}
+
+.whats-new-card {
+    max-width: 800px;
+    margin: auto;
+    background: var(--bg-light);
+    border-radius: 16px;
+    padding: 35px;
+    border-left: 5px solid var(--primary);
+}
+
+.whats-new-card h3 {
+    color: var(--primary-dark);
+    font-size: 1.25rem;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.whats-new-card ul {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.whats-new-card li {
+    font-size: 0.98rem;
+    color: var(--text-dark);
+}
+
+/* =========================
+        Single-Bar Footer
+========================= */
+footer {
+    background: var(--primary-dark);
+    color: var(--white);
+    padding: 22px 8%;
+}
+
+.footer-bar {
+    max-width: 1200px;
+    margin: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.footer-left {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.footer-link {
+    color: var(--white);
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: var(--target-tap-size);
+    transition: opacity 0.2s ease;
+}
+
+.footer-link:hover {
+    opacity: 0.8;
+}
+
+.footer-right p {
+    font-size: 0.88rem;
+    opacity: 0.85;
+}
+
+/* =========================
+    Responsive Modifications
+========================= */
+@media (max-width: 992px) {
+    .workflow-container {
+        flex-direction: column;
+    }
+
+    .step-arrow {
+        transform: rotate(90deg);
+        margin: -5px 0;
+    }
+
+    .step {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .mobile-toggle {
+        display: block;
+    }
+
+    .nav-container {
+        position: fixed;
+        top: 70px;
+        left: -100%;
+        width: 100%;
+        height: calc(100vh - 70px);
+        background: var(--white);
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 40px 20px;
+        gap: 30px;
+        transition: left 0.3s ease;
+    }
+
+    .nav-container.active {
+        left: 0;
+    }
+
+    .nav-links {
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .nav-actions {
+        flex-direction: column;
+        width: 100%;
+        max-width: 280px;
+    }
+
+    .btn-nav-login,
+    .btn-nav-signup {
+        width: 100%;
+        text-align: center;
+    }
+
+    .hero-container {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .hero-buttons {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+        width: 100%;
+    }
+
+    .hero-image {
+        margin-top: 10px;
+    }
+
+    .footer-bar {
+        flex-direction: column;
+        text-align: center;
+        justify-content: center;
+    }
+}
