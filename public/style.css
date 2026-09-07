@@ -115,7 +115,7 @@ header {
     gap: 25px;
 }
 
-/* Updated Nav Links with Smooth Blue Underline */
+/* Nav Links with Smooth Blue Underline */
 .nav-links a {
     color: var(--text-dark);
     font-weight: 500;
@@ -398,13 +398,29 @@ header {
     border-left: 5px solid var(--primary);
 }
 
-.whats-new-card h3 {
+.whats-new-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+    gap: 15px;
+}
+
+.whats-new-header h3 {
     color: var(--primary-dark);
     font-size: 1.25rem;
-    margin-bottom: 20px;
     display: flex;
     align-items: center;
     gap: 10px;
+    margin: 0;
+}
+
+.version-date {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary);
+    white-space: nowrap;
 }
 
 .whats-new-card ul {
