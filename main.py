@@ -3,7 +3,7 @@ from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -48,6 +48,18 @@ async def auth_callback(request: Request):
 async def logout(request: Request):
   request.session.clear()
   return RedirectResponse("/")
+
+
+@app.get("/api/me")
+async def get_current_user(request: Request):
+  user = request.session.get("user")
+  if not user:
+    return JSONResponse(
+        content={"authenticated": False, "message": "Not authenticated"},
+        status_code=401,
+    )
+
+  return {"authenticated": True, "user": user}
 
 
 @app.get("/dashboard")

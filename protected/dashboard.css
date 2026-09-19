@@ -145,17 +145,10 @@ button {
     font-weight: 700;
 }
 
-.edit-name-btn {
-    background: none;
+.user-email {
+    font-size: 0.95rem;
     color: var(--text-muted);
-    font-size: 1rem;
-    padding: 4px;
-    border-radius: 6px;
-}
-
-.edit-name-btn:hover {
-    color: var(--primary);
-    background: var(--primary-tint);
+    margin-top: 0.25rem;
 }
 
 /* =========================

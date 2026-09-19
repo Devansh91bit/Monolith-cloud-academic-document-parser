@@ -45,8 +45,8 @@
     <section class="dash-welcome" id="welcome">
         <div class="greeting-row">
             <h1>Hello, <span id="usernameDisplay"></span> 👋</h1>
-            <button class="edit-name-btn" id="editNameBtn" title="Edit Display Name"><i class="fa-solid fa-pen"></i></button>
         </div>
+        <b><p class="user-email" id="userEmailDisplay"></p></b>
     </section>
 
     <!-- ================= GLOBAL ACTION BAR ================= -->
@@ -176,9 +176,9 @@
 <script src="dashboard.js"></script>
 <script>
   window.watsonAssistantChatOptions = {
-    integrationID: "ef283897-df9b-4f1f-9f57-86251084ea6e", // The ID of this integration.
-    region: "https://integrations.au-syd.assistant.watson.appdomain.cloud", // The region your integration is hosted in.
-    serviceInstanceID: "d1a51fba-116e-4eef-81c8-94c19e0bb6fe", // The ID of your service instance.
+    integrationID: "ef283897-df9b-4f1f-9f57-86251084ea6e",
+    region: "https://integrations.au-syd.assistant.watson.appdomain.cloud",
+    serviceInstanceID: "d1a51fba-116e-4eef-81c8-94c19e0bb6fe",
     onLoad: async (instance) => { await instance.render(); }
   };
   setTimeout(function(){
