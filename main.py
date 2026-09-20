@@ -26,13 +26,11 @@ oauth.register(
     client_kwargs={"scope": "openid profile email"},
 )
 
-
 @app.get("/auth/login")
 async def login(request: Request):
   return await oauth.appid.authorize_redirect(
       request, "http://127.0.0.1:8000/auth/callback"
   )
-
 
 @app.get("/auth/callback")
 async def auth_callback(request: Request):
@@ -43,12 +41,10 @@ async def auth_callback(request: Request):
   except OAuthError:
     return RedirectResponse("/auth/login")
 
-
 @app.get("/auth/logout")
 async def logout(request: Request):
   request.session.clear()
   return RedirectResponse("/")
-
 
 @app.get("/api/me")
 async def get_current_user(request: Request):
@@ -61,14 +57,12 @@ async def get_current_user(request: Request):
 
   return {"authenticated": True, "user": user}
 
-
 @app.get("/dashboard")
 async def dashboard(request: Request):
   if "user" not in request.session:
     return RedirectResponse("/auth/login")
 
   return FileResponse("protected/dashboard.html")
-
 
 @app.get("/dashboard.css")
 async def dashboard_css(request: Request):
@@ -77,13 +71,11 @@ async def dashboard_css(request: Request):
 
   return FileResponse("protected/dashboard.css")
 
-
 @app.get("/dashboard.js")
 async def dashboard_js(request: Request):
   if "user" not in request.session:
     return RedirectResponse("/auth/login")
 
   return FileResponse("protected/dashboard.js")
-
 
 app.mount("/", StaticFiles(directory="public", html=True), name="public")
