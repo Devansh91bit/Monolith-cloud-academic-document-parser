@@ -594,12 +594,13 @@ textarea {
     bottom: 1.5rem;
     left: 50%;
     transform: translateX(-50%) translateY(100px);
-    background: #202020;
-    color: #ffffff;
-    border: 1px solid var(--border);
+    background: #2cbb5d;
+    color: #000000;
+    border: 1px solid #25a650;
     padding: 0.75rem 1.25rem;
     border-radius: 10px;
     font-size: 0.9rem;
+    font-weight: 600;
     opacity: 0;
     transition: transform 0.3s ease, opacity 0.3s ease;
     z-index: 3000;
@@ -705,4 +706,37 @@ select:focus-visible {
         flex-wrap: wrap;
         justify-content: center;
     }
+}
+
+
+/* Course Card Actions */
+.course-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.course-card .btn-plain,
+.course-card .btn-primary {
+    width: 100%;
+    margin-top: 0.35rem;
+}
+
+.course-card .btn-plain {
+    border: 1px solid #3f3f46;
+    color: #d1d5db;
+    background: #161616;
+    font-weight: 500;
+}
+
+.course-card .btn-plain:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+    background: #351717;
+}
+
+.course-card .btn-primary:disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+    transform: none;
 }

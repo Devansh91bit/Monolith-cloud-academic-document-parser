@@ -1,20 +1,38 @@
 
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from uuid import uuid4
 
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth
+from bson import ObjectId
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pymongo.errors import DuplicateKeyError, PyMongoError
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from database import create_mongodb_client, DATABASE_NAME
+from storage import upload_file, delete_file
 from models import CourseCreate
 
+
 load_dotenv()
+
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MiB
+
+ALLOWED_FILE_TYPES = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 
 @asynccontextmanager
@@ -59,6 +77,18 @@ oauth.register(
 )
 
 
+def get_user(request: Request):
+    user = request.session.get("user")
+
+    if not user or not user.get("sub"):
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required.",
+        )
+
+    return user
+
+
 @app.get("/auth/login")
 async def login(request: Request):
     return await oauth.appid.authorize_redirect(
@@ -97,14 +127,7 @@ async def get_current_user(request: Request):
 
 @app.post("/api/courses", status_code=201)
 async def create_course(course: CourseCreate, request: Request):
-    user = request.session.get("user")
-
-    if not user or not user.get("sub"):
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required.",
-        )
-
+    user = get_user(request)
     course_data = course.model_dump()
     course_data["user_id"] = user["sub"]
 
@@ -127,6 +150,182 @@ async def create_course(course: CourseCreate, request: Request):
         "message": "Course created successfully.",
         "course_id": str(result.inserted_id),
     }
+
+
+@app.get("/api/courses")
+async def get_courses(request: Request):
+    user = get_user(request)
+
+    try:
+        courses = await request.app.state.courses_collection.find(
+            {"user_id": user["sub"]}
+        ).to_list(length=None)
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve courses. Please try again.",
+        )
+
+    for course in courses:
+        course["id"] = str(course.pop("_id"))
+
+    return {"courses": courses}
+
+
+@app.delete("/api/courses/{course_id}")
+async def delete_course(course_id: str, request: Request):
+    user = get_user(request)
+
+    if not ObjectId.is_valid(course_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid course ID.",
+        )
+
+    try:
+        result = await request.app.state.courses_collection.delete_one(
+            {
+                "_id": ObjectId(course_id),
+                "user_id": user["sub"],
+            }
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to delete the course. Please try again.",
+        )
+
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Course not found.",
+        )
+
+    return {"message": "Course deleted successfully."}
+
+
+@app.post("/api/documents", status_code=201)
+async def upload_document(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    user = get_user(request)
+    filename = os.path.basename((file.filename or "").strip())
+    extension = os.path.splitext(filename)[1].lower()
+    expected_type = ALLOWED_FILE_TYPES.get(extension)
+
+    if not filename or not expected_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Upload PDF, Word, PowerPoint, or Excel files.",
+        )
+
+    if file.content_type != expected_type:
+        raise HTTPException(
+            status_code=400,
+            detail="File extension and content type do not match.",
+        )
+
+    object_key = f"users/{user['sub']}/{uuid4().hex}{extension}"
+    size = 0
+    uploaded = False
+
+    try:
+        # Copy in chunks so the entire file is never loaded into memory.
+        from tempfile import SpooledTemporaryFile
+
+        with SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b") as temp:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+
+                if size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="File exceeds the 100 MiB upload limit.",
+                    )
+
+                temp.write(chunk)
+
+            if size == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="The uploaded file is empty.",
+                )
+
+            temp.seek(0)
+
+            await run_in_threadpool(
+                upload_file, temp, object_key, expected_type
+            )
+            uploaded = True
+
+        document = {
+            "user_id": user["sub"],
+            "filename": filename,
+            "object_key": object_key,
+            "content_type": expected_type,
+            "size": size,
+            "course_ids": [],
+            "uploaded_at": datetime.now(timezone.utc),
+        }
+
+        result = await request.app.state.documents_collection.insert_one(
+            document
+        )
+
+    except HTTPException:
+        raise
+    except PyMongoError:
+        if uploaded:
+            try:
+                await run_in_threadpool(delete_file, object_key)
+            except Exception:
+                pass
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to save document metadata. Please try again.",
+        )
+    except Exception:
+        if uploaded:
+            try:
+                await run_in_threadpool(delete_file, object_key)
+            except Exception:
+                pass
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to upload the document. Please try again.",
+        )
+    finally:
+        await file.close()
+
+    return {
+        "message": "Document uploaded successfully.",
+        "document_id": str(result.inserted_id),
+        "filename": filename,
+        "size": size,
+    }
+
+
+@app.get("/api/documents")
+async def get_documents(request: Request):
+    user = get_user(request)
+
+    try:
+        documents = await request.app.state.documents_collection.find(
+            {"user_id": user["sub"]}
+        ).to_list(length=None)
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve documents. Please try again.",
+        )
+
+    for document in documents:
+        document["id"] = str(document.pop("_id"))
+
+    return {"documents": documents}
 
 
 @app.get("/dashboard")
