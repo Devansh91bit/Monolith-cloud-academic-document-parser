@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 class CourseCreate(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -6,8 +6,6 @@ class CourseCreate(BaseModel):
     course_code: str
     course_name: str
     instructor: str | None = None
-    semester: int
-    year: int = Field(ge=1, le=4)
 
     @field_validator("course_code")
     @classmethod

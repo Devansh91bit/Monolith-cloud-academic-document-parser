@@ -18,8 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const userEmailDisplay = document.getElementById("userEmailDisplay");
 
         if (usernameDisplay) {
-          usernameDisplay.textContent = data.user.name || data.user.nickname || "User";
+          usernameDisplay.textContent =
+            data.user.name || data.user.nickname || "User";
         }
+
         if (userEmailDisplay && data.user.email) {
           userEmailDisplay.textContent = data.user.email;
         }
@@ -28,4 +30,31 @@ document.addEventListener("DOMContentLoaded", () => {
     .catch((err) => {
       console.warn("User info fetch failed:", err);
     });
+
+  const courseModalOverlay = document.getElementById("courseModalOverlay");
+
+  const openCourseModal = () => {
+    courseModalOverlay.setAttribute("aria-hidden", "false");
+  };
+
+  const closeCourseModal = () => {
+    courseModalOverlay.setAttribute("aria-hidden", "true");
+  };
+
+  [
+    "openCourseModalBtn",
+    "openCourseHeaderBtn"
+  ].forEach((id) => {
+    const button = document.getElementById(id);
+
+    if (button) {
+      button.addEventListener("click", openCourseModal);
+    }
+  });
+
+  const cancelCourseBtn = document.getElementById("cancelCourseBtn");
+
+  if (cancelCourseBtn) {
+    cancelCourseBtn.addEventListener("click", closeCourseModal);
+  }
 });
