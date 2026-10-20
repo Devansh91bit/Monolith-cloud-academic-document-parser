@@ -1,35 +1,30 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Monolith | User Dashboard</title>
-
     <link rel="stylesheet" href="dashboard.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 </head>
 <body id="top">
-
-<!-- ================= DASHBOARD HEADER ================= -->
 <header class="dash-header">
     <nav class="dash-nav">
         <a href="#top" class="dash-logo">
             <i class="fa-solid fa-graduation-cap"></i> MONOLITH
         </a>
-
         <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle Navigation">
             <i class="fa-solid fa-bars"></i>
         </button>
-
         <div class="dash-nav-container" id="navContainer">
             <ul class="dash-nav-links">
                 <li><a href="#deadlines"><i class="fa-solid fa-clock"></i> Deadlines</a></li>
                 <li><a href="#courses"><i class="fa-solid fa-book"></i> My Courses</a></li>
                 <li><a href="#documents"><i class="fa-solid fa-folder"></i> My Documents</a></li>
             </ul>
-
             <div class="dash-nav-actions">
                 <button class="btn-logout" id="logoutBtn">
                     <i class="fa-solid fa-right-from-bracket"></i> Logout
@@ -40,8 +35,6 @@
 </header>
 
 <main class="dash-container">
-
-    <!-- ================= GREETING HERO ================= -->
     <section class="dash-welcome" id="welcome">
         <div class="greeting-row">
             <h1>Hello, <span id="usernameDisplay"></span> 👋</h1>
@@ -49,25 +42,26 @@
         <b><p class="user-email" id="userEmailDisplay"></p></b>
     </section>
 
-    <!-- ================= GLOBAL ACTION BAR ================= -->
     <section class="dash-action-bar">
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="globalSearchInput" placeholder="Search deadlines, courses, or uploaded files...">
         </div>
         <div class="action-buttons">
-            <button class="btn-secondary-outline" id="openCourseModalBtn"><i class="fa-solid fa-plus"></i> Add Course</button>
-            <button class="btn-primary" id="openUploadModalBtn"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+            <button class="btn-secondary-outline" id="openCourseModalBtn">
+                <i class="fa-solid fa-plus"></i> Add Course
+            </button>
+            <button class="btn-primary" id="openUploadModalBtn">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Upload Document
+            </button>
         </div>
     </section>
 
-    <!-- ================= SECTION 1: DEADLINES (TOP PRIORITY) ================= -->
     <section class="dash-section" id="deadlines">
         <div class="section-header">
             <h2><i class="fa-solid fa-clock"></i> Upcoming Deadlines</h2>
             <button class="btn-text-action" id="createDeadlineModalBtn">+ Quick Add Task</button>
         </div>
-
         <ul class="item-list" id="deadlineList"></ul>
         <div class="empty-state hidden" id="deadlinesEmpty">
             <i class="fa-solid fa-calendar-check"></i>
@@ -75,13 +69,11 @@
         </div>
     </section>
 
-    <!-- ================= SECTION 2: MY COURSES ================= -->
     <section class="dash-section" id="courses">
         <div class="section-header">
             <h2><i class="fa-solid fa-book"></i> My Courses</h2>
             <button class="btn-text-action" id="openCourseHeaderBtn">+ Add Course</button>
         </div>
-
         <div class="course-grid" id="courseList"></div>
         <div class="empty-state hidden" id="coursesEmpty">
             <i class="fa-solid fa-folder-plus"></i>
@@ -89,23 +81,19 @@
         </div>
     </section>
 
-    <!-- ================= SECTION 3: MY DOCUMENTS ================= -->
     <section class="dash-section" id="documents">
         <div class="section-header">
             <h2><i class="fa-solid fa-folder-open"></i> My Documents</h2>
             <button class="btn-text-action" id="openUploadHeaderBtn">+ Upload Document</button>
         </div>
-
         <ul class="item-list" id="docList"></ul>
         <div class="empty-state hidden" id="docsEmpty">
             <i class="fa-solid fa-file-arrow-up"></i>
-            <p>No syllabus files uploaded yet. Drag & drop or click "Upload Document" to begin parsing.</p>
+            <p>No documents uploaded yet. Click "Upload Document" to get started.</p>
         </div>
     </section>
-
 </main>
 
-<!-- ================= FOOTER ================= -->
 <footer class="dash-footer">
     <div class="footer-inner">
         <div class="footer-left">
@@ -119,7 +107,6 @@
     </div>
 </footer>
 
-<!-- ================= MODAL: ADD COURSE ================= -->
 <div class="modal-overlay" id="courseModalOverlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="courseModalTitle">
         <h3 id="courseModalTitle"><i class="fa-solid fa-book"></i> Add New Course</h3>
@@ -146,26 +133,32 @@
     </div>
 </div>
 
-<!-- ================= MODAL: UPLOAD DOCUMENT ================= -->
 <div class="modal-overlay" id="uploadModalOverlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="uploadModalTitle">
         <h3 id="uploadModalTitle"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document to Monolith</h3>
         <form id="uploadForm">
             <div class="field">
                 <label for="courseSelect">Attach to Course (Optional)</label>
-                <select id="courseSelect"><option value="">-- Select Course --</option></select>
+                <select id="courseSelect">
+                    <option value="">-- Select Course --</option>
+                </select>
             </div>
             <div class="field">
-                <label>File Target (PDF, DOCX)</label>
+                <label for="fileInput">File (PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX)</label>
                 <button type="button" class="file-picker-btn" id="filePickerBtn">
-                    <i class="fa-solid fa-file-pdf"></i> Select File for R2 Direct Stream
+                    <i class="fa-solid fa-file-arrow-up"></i> Select File
                 </button>
-                <input type="file" id="fileInput" accept=".pdf,.docx,.txt" hidden>
+                <input
+                    type="file"
+                    id="fileInput"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+                    hidden
+                >
                 <div class="chip-list" id="chipList"></div>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn-plain" id="cancelUploadBtn">Cancel</button>
-                <button type="button" class="btn-primary" id="confirmUploadBtn">Upload & Parse</button>
+                <button type="button" class="btn-primary" id="confirmUploadBtn">Upload Document</button>
             </div>
         </form>
     </div>
@@ -175,17 +168,22 @@
 
 <script src="dashboard.js"></script>
 <script>
-  window.watsonAssistantChatOptions = {
-    integrationID: "ef283897-df9b-4f1f-9f57-86251084ea6e",
-    region: "https://integrations.au-syd.assistant.watson.appdomain.cloud",
-    serviceInstanceID: "d1a51fba-116e-4eef-81c8-94c19e0bb6fe",
-    onLoad: async (instance) => { await instance.render(); }
-  };
-  setTimeout(function(){
-    const t=document.createElement('script');
-    t.src="https://web-chat.global.assistant.watson.appdomain.cloud/versions/" + (window.watsonAssistantChatOptions.clientVersion || 'latest') + "/WatsonAssistantChatEntry.js";
-    document.head.appendChild(t);
-  });
+    window.watsonAssistantChatOptions = {
+        integrationID: "ef283897-df9b-4f1f-9f57-86251084ea6e",
+        region: "https://integrations.au-syd.assistant.watson.appdomain.cloud",
+        serviceInstanceID: "d1a51fba-116e-4eef-81c8-94c19e0bb6fe",
+        onLoad: async (instance) => {
+            await instance.render();
+        }
+    };
+
+    setTimeout(function () {
+        const t = document.createElement("script");
+        t.src = "https://web-chat.global.assistant.watson.appdomain.cloud/versions/" +
+            (window.watsonAssistantChatOptions.clientVersion || "latest") +
+            "/WatsonAssistantChatEntry.js";
+        document.head.appendChild(t);
+    });
 </script>
 </body>
 </html>

@@ -740,3 +740,71 @@ select:focus-visible {
     cursor: not-allowed;
     transform: none;
 }
+
+
+/* =========================
+   Document Cards
+========================= */
+#docList > li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    min-width: 0;
+    padding: 1rem 1.1rem;
+    background: #202020;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+#docList > li:hover {
+    border-color: var(--primary);
+    background: #1d241f;
+}
+
+#docList > li > div {
+    flex: 1;
+    min-width: 0;
+}
+
+#docList > li strong {
+    display: block;
+    color: var(--text-dark);
+    font-size: 0.95rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+#docList > li p {
+    margin-top: 0.3rem;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+#docList > li .btn-secondary-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    white-space: nowrap;
+    text-align: center;
+}
+
+#docList > li .btn-secondary-outline:focus-visible {
+    outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+    #docList > li {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.85rem;
+        padding: 0.9rem;
+    }
+
+    #docList > li .btn-secondary-outline {
+        width: 100%;
+    }
+}

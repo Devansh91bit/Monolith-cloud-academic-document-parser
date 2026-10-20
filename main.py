@@ -3,21 +3,29 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
+from tempfile import SpooledTemporaryFile
 
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth
 from bson import ObjectId
+from botocore.exceptions import BotoCoreError, ClientError
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pymongo.errors import DuplicateKeyError, PyMongoError
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from database import create_mongodb_client, DATABASE_NAME
-from storage import upload_file, delete_file
 from models import CourseCreate
+from storage import upload_file, download_file, delete_file
 
 
 load_dotenv()
@@ -212,15 +220,15 @@ async def upload_document(
     user = get_user(request)
     filename = os.path.basename((file.filename or "").strip())
     extension = os.path.splitext(filename)[1].lower()
-    expected_type = ALLOWED_FILE_TYPES.get(extension)
+    content_type = ALLOWED_FILE_TYPES.get(extension)
 
-    if not filename or not expected_type:
+    if not filename or not content_type:
         raise HTTPException(
             status_code=400,
             detail="Unsupported file type. Upload PDF, Word, PowerPoint, or Excel files.",
         )
 
-    if file.content_type != expected_type:
+    if file.content_type != content_type:
         raise HTTPException(
             status_code=400,
             detail="File extension and content type do not match.",
@@ -231,10 +239,9 @@ async def upload_document(
     uploaded = False
 
     try:
-        # Copy in chunks so the entire file is never loaded into memory.
-        from tempfile import SpooledTemporaryFile
-
-        with SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b") as temp:
+        with SpooledTemporaryFile(
+            max_size=8 * 1024 * 1024, mode="w+b"
+        ) as temp:
             while chunk := await file.read(1024 * 1024):
                 size += len(chunk)
 
@@ -253,9 +260,8 @@ async def upload_document(
                 )
 
             temp.seek(0)
-
             await run_in_threadpool(
-                upload_file, temp, object_key, expected_type
+                upload_file, temp, object_key, content_type
             )
             uploaded = True
 
@@ -263,7 +269,7 @@ async def upload_document(
             "user_id": user["sub"],
             "filename": filename,
             "object_key": object_key,
-            "content_type": expected_type,
+            "content_type": content_type,
             "size": size,
             "course_ids": [],
             "uploaded_at": datetime.now(timezone.utc),
@@ -326,6 +332,58 @@ async def get_documents(request: Request):
         document["id"] = str(document.pop("_id"))
 
     return {"documents": documents}
+
+
+@app.get("/api/documents/{document_id}/download")
+async def download_document(document_id: str, request: Request):
+    user = get_user(request)
+
+    if not ObjectId.is_valid(document_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid document ID.",
+        )
+
+    try:
+        document = await request.app.state.documents_collection.find_one(
+            {
+                "_id": ObjectId(document_id),
+                "user_id": user["sub"],
+            }
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve document metadata.",
+        )
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
+        )
+
+    try:
+        file_stream = await run_in_threadpool(
+            download_file, document["object_key"]
+        )
+    except (ClientError, BotoCoreError):
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to retrieve the document from storage.",
+        )
+
+    filename = os.path.basename(document["filename"])
+
+    return StreamingResponse(
+        file_stream,
+        media_type=document["content_type"],
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+        background=BackgroundTask(file_stream.close),
+    )
 
 
 @app.get("/dashboard")
