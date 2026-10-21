@@ -40,7 +40,30 @@ def download_file(object_key):
     return response["Body"]
 
 def delete_file(object_key):
-    B2_CLIENT.delete_object(
+    response = B2_CLIENT.list_object_versions(
         Bucket=B2_BUCKET_NAME,
-        Key=object_key,
+        Prefix=object_key,
     )
+
+    versions = response.get("Versions", []) + response.get("DeleteMarkers", [])
+
+    while True:
+        for item in versions:
+            if item["Key"] == object_key:
+                B2_CLIENT.delete_object(
+                    Bucket=B2_BUCKET_NAME,
+                    Key=object_key,
+                    VersionId=item["VersionId"],
+                )
+
+        if not response.get("IsTruncated"):
+            break
+
+        response = B2_CLIENT.list_object_versions(
+            Bucket=B2_BUCKET_NAME,
+            Prefix=object_key,
+            KeyMarker=response["NextKeyMarker"],
+            VersionIdMarker=response.get("NextVersionIdMarker"),
+        )
+
+        versions = response.get("Versions", []) + response.get("DeleteMarkers", [])

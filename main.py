@@ -385,6 +385,66 @@ async def download_document(document_id: str, request: Request):
         background=BackgroundTask(file_stream.close),
     )
 
+@app.delete("/api/documents/{document_id}")
+async def delete_document(document_id: str, request: Request):
+    user = get_user(request)
+
+    if not ObjectId.is_valid(document_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid document ID.",
+        )
+
+    try:
+        document = await request.app.state.documents_collection.find_one(
+            {
+                "_id": ObjectId(document_id),
+                "user_id": user["sub"],
+            }
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve document metadata.",
+        )
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
+        )
+
+    try:
+        await run_in_threadpool(delete_file, document["object_key"])
+    except (ClientError, BotoCoreError):
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to delete the document from storage.",
+        )
+
+    try:
+        result = await request.app.state.documents_collection.delete_one(
+            {
+                "_id": ObjectId(document_id),
+                "user_id": user["sub"],
+            }
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "The file was deleted from storage, "
+                "but its metadata could not be deleted."
+            ),
+        )
+
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Document metadata not found.",
+        )
+
+    return {"message": "Document deleted successfully."}
 
 @app.get("/dashboard")
 async def dashboard(request: Request):

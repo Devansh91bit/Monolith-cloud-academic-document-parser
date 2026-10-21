@@ -434,6 +434,10 @@ header {
     color: var(--text-dark);
 }
 
+.whats-new-card + .whats-new-card {
+    margin-top: clamp(1rem, 3vw, 2rem);
+}
+
 /* =========================
         Single-Bar Footer
 ========================= */

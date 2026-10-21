@@ -389,7 +389,42 @@ document.addEventListener("DOMContentLoaded", () => {
           `Open or download ${doc.filename}`
         );
 
-        item.append(details, openLink);
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "btn-secondary-outline btn-delete";
+        deleteButton.textContent = "Delete";
+        deleteButton.type = "button";
+        deleteButton.setAttribute(
+          "aria-label",
+          `Delete ${doc.filename}`
+        );
+        
+deleteButton.addEventListener("click", async () => {
+  const confirmed = confirm(
+    `Are you sure you want to delete "${doc.filename}"?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(
+      `/api/documents/${encodeURIComponent(doc.id)}`,
+      { method: "DELETE" }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to delete document.");
+    }
+
+    showToast("Document deleted successfully.");
+    await loadDocuments();
+  } catch (error) {
+    console.error("Document deletion failed:", error);
+    showToast("Unable to delete document.");
+  }
+});
+
+
+        item.append(details, openLink, deleteButton); 
         docList.appendChild(item);
       });
     } catch (error) {

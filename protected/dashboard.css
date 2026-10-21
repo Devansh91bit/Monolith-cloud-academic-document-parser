@@ -735,6 +735,12 @@ select:focus-visible {
     background: #351717;
 }
 
+.btn-delete:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+    background: #351717;
+}
+
 .course-card .btn-primary:disabled {
     opacity: 0.75;
     cursor: not-allowed;
