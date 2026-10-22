@@ -35,12 +35,40 @@
 </header>
 
 <main class="dash-container">
-    <section class="dash-welcome" id="welcome">
+
+    
+<section class="dash-welcome" id="welcome">
+    <div class="welcome-user">
         <div class="greeting-row">
             <h1>Hello, <span id="usernameDisplay"></span> 👋</h1>
         </div>
         <b><p class="user-email" id="userEmailDisplay"></p></b>
-    </section>
+    </div>
+
+    <div class="storage-usage" id="storageUsage">
+        <div class="storage-usage-heading">Storage usage</div>
+
+        <div class="storage-usage-percentage" id="storageUsagePercentage">
+            0%
+        </div>
+
+        <div class="storage-usage-details" id="storageUsageText">
+            Total storage usage: 0 MB / 500 MB
+        </div>
+
+        <div
+            class="storage-usage-track"
+            role="progressbar"
+            aria-label="Document storage usage"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="storageUsageProgress"
+        >
+            <div class="storage-usage-fill" id="storageUsageBar"></div>
+        </div>
+    </div>
+</section>
 
     <section class="dash-action-bar">
         <div class="search-box">

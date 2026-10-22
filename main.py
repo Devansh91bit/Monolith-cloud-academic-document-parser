@@ -18,6 +18,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
@@ -31,6 +32,7 @@ from storage import upload_file, download_file, delete_file
 load_dotenv()
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MiB
+MAX_STORAGE_SIZE = 500 * 1024 * 1024 #500 MiB
 
 ALLOWED_FILE_TYPES = {
     ".pdf": "application/pdf",
@@ -53,6 +55,7 @@ async def lifespan(app: FastAPI):
         app.state.courses_collection = app.state.db["courses"]
         app.state.documents_collection = app.state.db["documents"]
         app.state.deadlines_collection = app.state.db["deadlines"]
+        app.state.storage_usage_collection = app.state.db["storage_usage"]
 
         await client.admin.command("ping")
 
@@ -60,6 +63,12 @@ async def lifespan(app: FastAPI):
             [("user_id", 1), ("course_code", 1)],
             unique=True,
             name="unique_user_course_code",
+        )
+
+        await app.state.storage_usage_collection.create_index(
+            [("user_id", 1)],
+            unique=True,
+            name="unique_user_storage_usage",
         )
 
         yield
@@ -131,6 +140,32 @@ async def get_current_user(request: Request):
         )
 
     return {"authenticated": True, "user": user}
+
+
+@app.get("/api/storage")
+async def get_storage_usage(request: Request):
+    user = get_user(request)
+
+    try:
+        usage = await request.app.state.storage_usage_collection.find_one(
+            {"user_id": user["sub"]},
+            {"_id": 0, "used_bytes": 1},
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve storage usage.",
+        )
+
+    used_bytes = usage["used_bytes"] if usage else 0
+
+    return {
+        "used_bytes": used_bytes,
+        "limit_bytes": MAX_STORAGE_SIZE,
+        "used_percent": round(
+            used_bytes / MAX_STORAGE_SIZE * 100, 2
+        ),
+    }
 
 
 @app.post("/api/courses", status_code=201)
@@ -212,6 +247,38 @@ async def delete_course(course_id: str, request: Request):
     return {"message": "Course deleted successfully."}
 
 
+async def reserve_storage(collection, user_id: str, size: int) -> bool:
+    try:
+        await collection.update_one(
+            {"user_id": user_id},
+            {"$setOnInsert": {"used_bytes": 0}},
+            upsert=True,
+        )
+    except DuplicateKeyError:
+        pass
+
+    result = await collection.find_one_and_update(
+        {
+            "user_id": user_id,
+            "used_bytes": {"$lte": MAX_STORAGE_SIZE - size},
+        },
+        {"$inc": {"used_bytes": size}},
+        return_document=ReturnDocument.AFTER,
+    )
+
+    return result is not None
+
+
+async def release_storage(collection, user_id: str, size: int):
+    await collection.update_one(
+        {
+            "user_id": user_id,
+            "used_bytes": {"$gte": size},
+        },
+        {"$inc": {"used_bytes": -size}},
+    )
+
+
 @app.post("/api/documents", status_code=201)
 async def upload_document(
     request: Request,
@@ -237,6 +304,7 @@ async def upload_document(
     object_key = f"users/{user['sub']}/{uuid4().hex}{extension}"
     size = 0
     uploaded = False
+    reserved = False
 
     try:
         with SpooledTemporaryFile(
@@ -259,7 +327,20 @@ async def upload_document(
                     detail="The uploaded file is empty.",
                 )
 
+            reserved = await reserve_storage(
+                request.app.state.storage_usage_collection,
+                user["sub"],
+                size,
+            )
+
+            if not reserved:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Your 500 MiB storage limit would be exceeded.",
+                )
+
             temp.seek(0)
+
             await run_in_threadpool(
                 upload_file, temp, object_key, content_type
             )
@@ -279,30 +360,37 @@ async def upload_document(
             document
         )
 
-    except HTTPException:
-        raise
-    except PyMongoError:
+    except Exception as exc:
         if uploaded:
             try:
                 await run_in_threadpool(delete_file, object_key)
             except Exception:
                 pass
 
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to save document metadata. Please try again.",
-        )
-    except Exception:
-        if uploaded:
+        if reserved:
             try:
-                await run_in_threadpool(delete_file, object_key)
+                await release_storage(
+                    request.app.state.storage_usage_collection,
+                    user["sub"],
+                    size,
+                )
             except Exception:
                 pass
+
+        if isinstance(exc, HTTPException):
+            raise
+
+        if isinstance(exc, PyMongoError):
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to save document metadata. Please try again.",
+            ) from exc
 
         raise HTTPException(
             status_code=500,
             detail="Unable to upload the document. Please try again.",
-        )
+        ) from exc
+
     finally:
         await file.close()
 
@@ -385,6 +473,7 @@ async def download_document(document_id: str, request: Request):
         background=BackgroundTask(file_stream.close),
     )
 
+
 @app.delete("/api/documents/{document_id}")
 async def delete_document(document_id: str, request: Request):
     user = get_user(request)
@@ -395,8 +484,11 @@ async def delete_document(document_id: str, request: Request):
             detail="Invalid document ID.",
         )
 
+    documents = request.app.state.documents_collection
+    storage_usage = request.app.state.storage_usage_collection
+
     try:
-        document = await request.app.state.documents_collection.find_one(
+        document = await documents.find_one(
             {
                 "_id": ObjectId(document_id),
                 "user_id": user["sub"],
@@ -422,29 +514,61 @@ async def delete_document(document_id: str, request: Request):
             detail="Unable to delete the document from storage.",
         )
 
-    try:
-        result = await request.app.state.documents_collection.delete_one(
+    async def delete_metadata_and_release_storage(session):
+        result = await documents.delete_one(
             {
-                "_id": ObjectId(document_id),
+                "_id": document["_id"],
                 "user_id": user["sub"],
-            }
+            },
+            session=session,
         )
+
+        if result.deleted_count != 1:
+            raise HTTPException(
+                status_code=404,
+                detail="Document metadata not found.",
+            )
+
+        usage_result = await storage_usage.update_one(
+            {
+                "user_id": user["sub"],
+                "used_bytes": {"$gte": document["size"]},
+            },
+            {"$inc": {"used_bytes": -document["size"]}},
+            session=session,
+        )
+
+        if usage_result.modified_count != 1:
+            raise RuntimeError(
+                "Storage counter is missing or inconsistent."
+            )
+
+    try:
+        async with request.app.state.mongodb_client.start_session() as session:
+            await session.with_transaction(
+                delete_metadata_and_release_storage
+            )
+    except HTTPException:
+        raise
     except PyMongoError:
         raise HTTPException(
             status_code=500,
             detail=(
-                "The file was deleted from storage, "
-                "but its metadata could not be deleted."
+                "The file was deleted from storage, but database changes "
+                "could not be completed. Please retry the deletion."
+            ),
+        )
+    except RuntimeError:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "The file was deleted from storage, but storage accounting "
+                "needs reconciliation."
             ),
         )
 
-    if result.deleted_count == 0:
-        raise HTTPException(
-            status_code=404,
-            detail="Document metadata not found.",
-        )
-
     return {"message": "Document deleted successfully."}
+
 
 @app.get("/dashboard")
 async def dashboard(request: Request):

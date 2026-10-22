@@ -317,6 +317,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Document uploaded successfully!");
 
       await loadDocuments();
+      await loadStorageUsage();
     } catch (error) {
       console.error("Document upload failed:", error);
       showToast(error.message || "Unable to upload document.");
@@ -417,6 +418,7 @@ deleteButton.addEventListener("click", async () => {
 
     showToast("Document deleted successfully.");
     await loadDocuments();
+    await loadStorageUsage();
   } catch (error) {
     console.error("Document deletion failed:", error);
     showToast("Unable to delete document.");
@@ -433,8 +435,67 @@ deleteButton.addEventListener("click", async () => {
     }
   }
 
+  
+  // Load storage usage
+async function loadStorageUsage() {
+  const usageText = document.getElementById("storageUsageText");
+  const usagePercentage = document.getElementById("storageUsagePercentage");
+  const usageBar = document.getElementById("storageUsageBar");
+  const progress = document.getElementById("storageUsageProgress");
+
+  if (!usageText || !usagePercentage || !usageBar || !progress) return;
+
+  try {
+    const response = await fetch("/api/storage");
+
+    if (!response.ok) {
+      throw new Error("Failed to load storage usage.");
+    }
+
+    const data = await response.json();
+    const usedBytes = data.used_bytes;
+    const limitBytes = data.limit_bytes;
+    const percentage = Math.min(
+      100,
+      Math.max(0, data.used_percent)
+    );
+
+    const formatStorage = (bytes) => {
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+    let color = "#22c55e";
+
+    if (percentage >= 90) {
+      color = "#ef4444";
+    } else if (percentage >= 80) {
+      color = "#f97316";
+    } else if (percentage >= 50) {
+      color = "#eab308";
+    }
+
+    usagePercentage.textContent = `${percentage.toFixed(1)}%`;
+    usagePercentage.style.color = color;
+
+    usageText.textContent =
+    `Total storage usage: ${formatStorage(usedBytes)} / ${formatStorage(limitBytes)}`;
+
+    usageBar.style.width = `${percentage}%`;
+    usageBar.style.backgroundColor = color;
+    progress.setAttribute("aria-valuenow", percentage.toFixed(1));
+  } catch (error) {
+    console.error("Storage usage loading failed:", error);
+    usageText.textContent = "Storage usage unavailable";
+  }
+}
+  
   // Load dashboard data on startup
   loadCourses();
   loadCourseOptions();
   loadDocuments();
+  loadStorageUsage();
 });
