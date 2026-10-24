@@ -883,3 +883,129 @@ select:focus-visible {
         width: 100%;
     }
 }
+
+
+/* Responsive deadline cards */
+#deadlineList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.deadline-card {
+  padding: clamp(0.875rem, 2vw, 1.125rem);
+  border: 3px solid var(--deadline-color);
+  border-radius: 0.75rem;
+  background: transparent;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.deadline-card:hover {
+  transform: translateY(-0.125rem);
+  box-shadow: 0 0.25rem 0.875rem rgba(0, 0, 0, 0.08);
+}
+
+.deadline-red {
+  --deadline-color: #ef4444;
+}
+
+.deadline-orange {
+  --deadline-color: #f97316;
+}
+
+.deadline-yellow {
+  --deadline-color: #eab308;
+}
+
+.deadline-green {
+  --deadline-color: #22c55e;
+}
+
+.deadline-card-heading,
+.deadline-title-group,
+.deadline-card-actions {
+  display: flex;
+  align-items: center;
+}
+
+.deadline-card-heading {
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.deadline-title-group {
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.deadline-title {
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.deadline-urgency-dot {
+  flex-shrink: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--deadline-color);
+}
+
+.urgency-red {
+  background: #ef4444;
+}
+
+.urgency-orange {
+  background: #f97316;
+}
+
+.urgency-yellow {
+  background: #eab308;
+}
+
+.urgency-green {
+  background: #22c55e;
+}
+
+.deadline-card-details p {
+  margin: 0.4375rem 0;
+  overflow-wrap: anywhere;
+}
+
+.deadline-card-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.875rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--deadline-color);
+}
+
+
+.deadline-delete-btn {
+  color: #22c55e;
+  border-color: #22c55e;
+  background: transparent;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.deadline-delete-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #351717;
+}
+
+
+.deadline-card-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 30rem) {
+  .deadline-card-actions button {
+    flex: 1 1 auto;
+  }
+}

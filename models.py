@@ -1,4 +1,6 @@
+
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -38,3 +40,37 @@ class DocumentCreate(BaseModel):
     uploaded_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+
+class DeadlineCreate(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    title: str
+    description: str = ""
+    due_at: datetime
+    course_id: str | None = None
+    status: Literal["not_started", "in_progress", "completed"] = "not_started"
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Deadline title cannot be empty")
+        return value
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("due_at", mode="before")
+    @classmethod
+    def validate_due_at(cls, value: datetime) -> datetime:
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Due date must include a timezone")
+
+        return value.astimezone(timezone.utc)

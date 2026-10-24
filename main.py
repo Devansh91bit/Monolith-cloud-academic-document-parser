@@ -25,14 +25,14 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from database import create_mongodb_client, DATABASE_NAME
-from models import CourseCreate
+from models import CourseCreate, DeadlineCreate
 from storage import upload_file, download_file, delete_file
 
 
 load_dotenv()
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MiB
-MAX_STORAGE_SIZE = 500 * 1024 * 1024 #500 MiB
+MAX_STORAGE_SIZE = 500 * 1024 * 1024  # 500 MiB
 
 ALLOWED_FILE_TYPES = {
     ".pdf": "application/pdf",
@@ -213,6 +213,208 @@ async def get_courses(request: Request):
         course["id"] = str(course.pop("_id"))
 
     return {"courses": courses}
+
+
+@app.post("/api/deadlines", status_code=201)
+async def create_deadline(deadline: DeadlineCreate, request: Request):
+    user = get_user(request)
+    deadline_data = deadline.model_dump()
+    course_id = deadline_data["course_id"]
+
+    if course_id is not None:
+        if not ObjectId.is_valid(course_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid course ID.",
+            )
+
+        try:
+            course = await request.app.state.courses_collection.find_one(
+                {
+                    "_id": ObjectId(course_id),
+                    "user_id": user["sub"],
+                },
+                {"_id": 1},
+            )
+        except PyMongoError:
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to validate the course. Please try again.",
+            )
+
+        if not course:
+            raise HTTPException(
+                status_code=404,
+                detail="Course not found.",
+            )
+
+    deadline_data["user_id"] = user["sub"]
+    deadline_data["created_at"] = datetime.now(timezone.utc)
+
+    try:
+        result = await request.app.state.deadlines_collection.insert_one(
+            deadline_data
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create the deadline. Please try again.",
+        )
+
+    return {
+        "message": "Deadline created successfully.",
+        "deadline_id": str(result.inserted_id),
+    }
+
+
+def calculate_time_left(due_at: datetime, status: str) -> str:
+    if status == "completed":
+        return "Completed"
+
+    if due_at.tzinfo is None or due_at.utcoffset() is None:
+        due_at = due_at.replace(tzinfo=timezone.utc)
+
+    difference = (due_at - datetime.now(timezone.utc)).total_seconds()
+    is_overdue = difference < 0
+    total_days = abs(difference) / 86400
+
+    if total_days < 1:
+        duration = "less than a day"
+    elif total_days < 30:
+        days = int(total_days)
+        duration = f"{days} {'day' if days == 1 else 'days'}"
+    elif total_days < 365:
+        months = int(total_days // 30)
+        duration = f"{months} {'month' if months == 1 else 'months'}"
+    else:
+        years = int(total_days // 365)
+        duration = f"{years} {'year' if years == 1 else 'years'}"
+
+    return f"Overdue by {duration}" if is_overdue else f"{duration} left"
+
+
+@app.get("/api/deadlines")
+async def get_deadlines(request: Request):
+    user = get_user(request)
+
+    try:
+        deadlines = await request.app.state.deadlines_collection.find(
+            {"user_id": user["sub"]}
+        ).sort("due_at", 1).to_list(length=None)
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve deadlines. Please try again.",
+        )
+
+    for deadline in deadlines:
+        deadline["id"] = str(deadline.pop("_id"))
+        deadline.pop("user_id", None)
+        deadline["time_left"] = calculate_time_left(
+            deadline["due_at"], deadline["status"]
+        )
+
+    return {"deadlines": deadlines}
+
+
+@app.put("/api/deadlines/{deadline_id}")
+async def update_deadline(
+    deadline_id: str, deadline: DeadlineCreate, request: Request
+):
+    user = get_user(request)
+
+    if not ObjectId.is_valid(deadline_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid deadline ID.",
+        )
+
+    deadline_data = deadline.model_dump()
+    course_id = deadline_data["course_id"]
+
+    if course_id is not None:
+        if not ObjectId.is_valid(course_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid course ID.",
+            )
+
+        try:
+            course = await request.app.state.courses_collection.find_one(
+                {
+                    "_id": ObjectId(course_id),
+                    "user_id": user["sub"],
+                },
+                {"_id": 1},
+            )
+        except PyMongoError:
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to validate the course. Please try again.",
+            )
+
+        if not course:
+            raise HTTPException(
+                status_code=404,
+                detail="Course not found.",
+            )
+
+    try:
+        result = await request.app.state.deadlines_collection.update_one(
+            {
+                "_id": ObjectId(deadline_id),
+                "user_id": user["sub"],
+            },
+            {"$set": deadline_data},
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to update the deadline. Please try again.",
+        )
+
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Deadline not found.",
+        )
+
+    return {
+        "message": "Deadline updated successfully.",
+        "deadline_id": deadline_id,
+    }
+
+
+@app.delete("/api/deadlines/{deadline_id}")
+async def delete_deadline(deadline_id: str, request: Request):
+    user = get_user(request)
+
+    if not ObjectId.is_valid(deadline_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid deadline ID.",
+        )
+
+    try:
+        result = await request.app.state.deadlines_collection.delete_one(
+            {
+                "_id": ObjectId(deadline_id),
+                "user_id": user["sub"],
+            }
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to delete the deadline. Please try again.",
+        )
+
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Deadline not found.",
+        )
+
+    return {"message": "Deadline deleted successfully."}
 
 
 @app.delete("/api/courses/{course_id}")

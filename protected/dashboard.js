@@ -1,7 +1,7 @@
-
 document.addEventListener("DOMContentLoaded", () => {
   const toast = document.getElementById("toast");
   let toastTimeout;
+  let courseCache = [];
 
   const showToast = (message) => {
     if (!toast) return;
@@ -122,6 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const data = await response.json();
+      courseCache = data.courses;
       courseList.replaceChildren();
 
       if (data.courses.length === 0) {
@@ -330,6 +331,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Format file size
   function formatFileSize(bytes) {
     if (bytes < 1024) return `${bytes} B`;
+
     if (bytes < 1024 * 1024) {
       return `${(bytes / 1024).toFixed(1)} KB`;
     }
@@ -362,10 +364,7 @@ document.addEventListener("DOMContentLoaded", () => {
       docsEmpty.classList.add("hidden");
 
       data.documents.forEach((doc) => {
-        // Use "doc" for the database record, preserving the browser's
-        // global "document" object for createElement().
         const item = document.createElement("li");
-
         const details = document.createElement("div");
 
         const filename = document.createElement("strong");
@@ -398,35 +397,34 @@ document.addEventListener("DOMContentLoaded", () => {
           "aria-label",
           `Delete ${doc.filename}`
         );
-        
-deleteButton.addEventListener("click", async () => {
-  const confirmed = confirm(
-    `Are you sure you want to delete "${doc.filename}"?`
-  );
 
-  if (!confirmed) return;
+        deleteButton.addEventListener("click", async () => {
+          const confirmed = confirm(
+            `Are you sure you want to delete "${doc.filename}"?`
+          );
 
-  try {
-    const response = await fetch(
-      `/api/documents/${encodeURIComponent(doc.id)}`,
-      { method: "DELETE" }
-    );
+          if (!confirmed) return;
 
-    if (!response.ok) {
-      throw new Error("Failed to delete document.");
-    }
+          try {
+            const response = await fetch(
+              `/api/documents/${encodeURIComponent(doc.id)}`,
+              { method: "DELETE" }
+            );
 
-    showToast("Document deleted successfully.");
-    await loadDocuments();
-    await loadStorageUsage();
-  } catch (error) {
-    console.error("Document deletion failed:", error);
-    showToast("Unable to delete document.");
-  }
-});
+            if (!response.ok) {
+              throw new Error("Failed to delete document.");
+            }
 
+            showToast("Document deleted successfully.");
+            await loadDocuments();
+            await loadStorageUsage();
+          } catch (error) {
+            console.error("Document deletion failed:", error);
+            showToast("Unable to delete document.");
+          }
+        });
 
-        item.append(details, openLink, deleteButton); 
+        item.append(details, openLink, deleteButton);
         docList.appendChild(item);
       });
     } catch (error) {
@@ -435,66 +433,450 @@ deleteButton.addEventListener("click", async () => {
     }
   }
 
-  
   // Load storage usage
-async function loadStorageUsage() {
-  const usageText = document.getElementById("storageUsageText");
-  const usagePercentage = document.getElementById("storageUsagePercentage");
-  const usageBar = document.getElementById("storageUsageBar");
-  const progress = document.getElementById("storageUsageProgress");
+  async function loadStorageUsage() {
+    const usageText = document.getElementById("storageUsageText");
+    const usagePercentage = document.getElementById("storageUsagePercentage");
+    const usageBar = document.getElementById("storageUsageBar");
+    const progress = document.getElementById("storageUsageProgress");
 
-  if (!usageText || !usagePercentage || !usageBar || !progress) return;
+    if (!usageText || !usagePercentage || !usageBar || !progress) return;
 
-  try {
-    const response = await fetch("/api/storage");
+    try {
+      const response = await fetch("/api/storage");
 
-    if (!response.ok) {
-      throw new Error("Failed to load storage usage.");
+      if (!response.ok) {
+        throw new Error("Failed to load storage usage.");
+      }
+
+      const data = await response.json();
+      const usedBytes = data.used_bytes;
+      const limitBytes = data.limit_bytes;
+      const percentage = Math.min(
+        100,
+        Math.max(0, data.used_percent)
+      );
+
+      const formatStorage = (bytes) => {
+        if (bytes < 1024 * 1024) {
+          return `${(bytes / 1024).toFixed(1)} KB`;
+        }
+
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      };
+
+      let color = "#22c55e";
+
+      if (percentage >= 90) {
+        color = "#ef4444";
+      } else if (percentage >= 80) {
+        color = "#f97316";
+      } else if (percentage >= 50) {
+        color = "#eab308";
+      }
+
+      usagePercentage.textContent = `${percentage.toFixed(1)}%`;
+      usagePercentage.style.color = color;
+
+      usageText.textContent =
+        `Total storage usage: ${formatStorage(usedBytes)} / ` +
+        `${formatStorage(limitBytes)}`;
+
+      usageBar.style.width = `${percentage}%`;
+      usageBar.style.backgroundColor = color;
+      progress.setAttribute("aria-valuenow", percentage.toFixed(1));
+    } catch (error) {
+      console.error("Storage usage loading failed:", error);
+      usageText.textContent = "Storage usage unavailable";
+    }
+  }
+
+  // Deadline modal: created dynamically; dashboard.html needs no changes.
+  const deadlineModalOverlay = document.createElement("div");
+  deadlineModalOverlay.className = "modal-overlay";
+  deadlineModalOverlay.id = "deadlineModalOverlay";
+  deadlineModalOverlay.setAttribute("aria-hidden", "true");
+
+  deadlineModalOverlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true"
+         aria-labelledby="deadlineModalTitle">
+      <h3 id="deadlineModalTitle">Add Deadline</h3>
+
+      <form id="deadlineForm">
+        <div class="field">
+          <label for="deadlineTitle">Title</label>
+          <input type="text" id="deadlineTitle" required maxlength="200"
+                 placeholder="e.g. Data Structures Assignment">
+        </div>
+
+        <div class="field">
+          <label for="deadlineDescription">Description (Optional)</label>
+          <textarea id="deadlineDescription" rows="3"
+                    placeholder="What needs to be completed?"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="deadlineDueAt">Due date and time</label>
+          <input type="datetime-local" id="deadlineDueAt" required>
+        </div>
+
+        <div class="field">
+          <label for="deadlineCourseId">Course (Optional)</label>
+          <select id="deadlineCourseId">
+            <option value="">-- No Course --</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="deadlineStatus">Status</label>
+          <select id="deadlineStatus" required>
+            <option value="not_started">Not started</option>
+            <option value="in_progress">In progress</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-plain" id="cancelDeadlineBtn">
+            Cancel
+          </button>
+          <button type="submit" class="btn-primary" id="saveDeadlineBtn">
+            Save Deadline
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(deadlineModalOverlay);
+
+  const deadlineForm = document.getElementById("deadlineForm");
+  const deadlineTitleInput = document.getElementById("deadlineTitle");
+  const deadlineDescriptionInput =
+    document.getElementById("deadlineDescription");
+  const deadlineDueAtInput = document.getElementById("deadlineDueAt");
+  const deadlineCourseSelect = document.getElementById("deadlineCourseId");
+  const deadlineStatusSelect = document.getElementById("deadlineStatus");
+  const saveDeadlineBtn = document.getElementById("saveDeadlineBtn");
+
+  let editingDeadlineId = null;
+
+  // Open create/edit deadline modal
+  const openDeadlineModal = async (deadline = null) => {
+    editingDeadlineId = deadline?.id || null;
+
+    document.getElementById("deadlineModalTitle").textContent =
+      deadline ? "Edit Deadline" : "Add Deadline";
+
+    saveDeadlineBtn.textContent =
+      deadline ? "Update Deadline" : "Save Deadline";
+
+    deadlineForm.reset();
+
+    try {
+      const response = await fetch("/api/courses");
+
+      if (!response.ok) {
+        throw new Error("Failed to load courses.");
+      }
+
+      const data = await response.json();
+      courseCache = data.courses;
+
+      deadlineCourseSelect.replaceChildren();
+
+      const noCourseOption = document.createElement("option");
+      noCourseOption.value = "";
+      noCourseOption.textContent = "-- No Course --";
+      deadlineCourseSelect.appendChild(noCourseOption);
+
+      courseCache.forEach((course) => {
+        const option = document.createElement("option");
+        option.value = course.id;
+        option.textContent =
+          `${course.course_code} — ${course.course_name}`;
+
+        deadlineCourseSelect.appendChild(option);
+      });
+    } catch (error) {
+      console.error("Deadline course options loading failed:", error);
+      showToast("Unable to load courses.");
+      return;
     }
 
-    const data = await response.json();
-    const usedBytes = data.used_bytes;
-    const limitBytes = data.limit_bytes;
-    const percentage = Math.min(
-      100,
-      Math.max(0, data.used_percent)
+    if (deadline) {
+      deadlineTitleInput.value = deadline.title || "";
+      deadlineDescriptionInput.value = deadline.description || "";
+      deadlineDueAtInput.value = toLocalDateTimeInput(deadline.due_at);
+      deadlineCourseSelect.value = deadline.course_id || "";
+      deadlineStatusSelect.value = deadline.status || "not_started";
+    } else {
+      deadlineStatusSelect.value = "not_started";
+    }
+
+    deadlineModalOverlay.setAttribute("aria-hidden", "false");
+    deadlineTitleInput.focus();
+  };
+
+  const closeDeadlineModal = () => {
+    deadlineModalOverlay.setAttribute("aria-hidden", "true");
+    editingDeadlineId = null;
+  };
+
+  // Convert an ISO datetime into the browser's local datetime input format.
+  function toLocalDateTimeInput(value) {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    const localDate = new Date(
+      date.getTime() - date.getTimezoneOffset() * 60000
     );
 
-    const formatStorage = (bytes) => {
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+    return localDate.toISOString().slice(0, 16);
   }
 
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
+  // The existing single Quick Add Task button opens the modal.
+  document
+    .getElementById("createDeadlineModalBtn")
+    ?.addEventListener("click", () => {
+      openDeadlineModal();
+    });
 
-    let color = "#22c55e";
+  document
+    .getElementById("cancelDeadlineBtn")
+    .addEventListener("click", closeDeadlineModal);
 
-    if (percentage >= 90) {
-      color = "#ef4444";
-    } else if (percentage >= 80) {
-      color = "#f97316";
-    } else if (percentage >= 50) {
-      color = "#eab308";
+  deadlineModalOverlay.addEventListener("click", (event) => {
+    if (event.target === deadlineModalOverlay) {
+      closeDeadlineModal();
+    }
+  });
+
+  // Create or update a deadline.
+  deadlineForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const dueDate = new Date(deadlineDueAtInput.value);
+
+    if (Number.isNaN(dueDate.getTime())) {
+      showToast("Please enter a valid due date and time.");
+      return;
     }
 
-    usagePercentage.textContent = `${percentage.toFixed(1)}%`;
-    usagePercentage.style.color = color;
+    const deadlineData = {
+      title: deadlineTitleInput.value.trim(),
+      description: deadlineDescriptionInput.value.trim(),
+      due_at: dueDate.toISOString(),
+      course_id: deadlineCourseSelect.value || null,
+      status: deadlineStatusSelect.value,
+    };
 
-    usageText.textContent =
-    `Total storage usage: ${formatStorage(usedBytes)} / ${formatStorage(limitBytes)}`;
+    saveDeadlineBtn.disabled = true;
 
-    usageBar.style.width = `${percentage}%`;
-    usageBar.style.backgroundColor = color;
-    progress.setAttribute("aria-valuenow", percentage.toFixed(1));
-  } catch (error) {
-    console.error("Storage usage loading failed:", error);
-    usageText.textContent = "Storage usage unavailable";
-  }
-}
+    try {
+      const isEditing = Boolean(editingDeadlineId);
+
+      const response = await fetch(
+        isEditing
+          ? `/api/deadlines/${encodeURIComponent(editingDeadlineId)}`
+          : "/api/deadlines",
+        {
+          method: isEditing ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(deadlineData),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || "Failed to save deadline.");
+      }
+
+      closeDeadlineModal();
+
+      showToast(
+        isEditing
+          ? "Deadline updated successfully!"
+          : "Deadline created successfully!"
+      );
+
+      await loadDeadlines();
+    } catch (error) {
+      console.error("Deadline save failed:", error);
+      showToast(error.message || "Unable to save deadline.");
+    } finally {
+      saveDeadlineBtn.disabled = false;
+    }
+  });
+
   
-  // Load dashboard data on startup
-  loadCourses();
+  // Load and render deadlines as individual cards.
+  async function loadDeadlines() {
+    const deadlineList = document.getElementById("deadlineList");
+    const deadlinesEmpty = document.getElementById("deadlinesEmpty");
+
+    if (!deadlineList || !deadlinesEmpty) return;
+
+    try {
+      const response = await fetch("/api/deadlines");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to load deadlines.");
+      }
+
+      deadlineList.replaceChildren();
+
+      if (!data.deadlines || data.deadlines.length === 0) {
+        deadlinesEmpty.classList.remove("hidden");
+        return;
+      }
+
+      deadlinesEmpty.classList.add("hidden");
+
+      const statusLabels = {
+        not_started: "Not started",
+        in_progress: "In progress",
+        completed: "Completed",
+      };
+
+      // Preserve the order returned by the backend.
+      data.deadlines.forEach((deadline) => {
+        const item = document.createElement("li");
+        item.className = "deadline-card";
+
+        const dueDate = new Date(deadline.due_at);
+        const remainingMs = dueDate.getTime() - Date.now();
+        const remainingDays = remainingMs / (1000 * 60 * 60 * 24);
+
+        let urgency = "green";
+
+        if (remainingDays <= 1) {
+          urgency = "red";
+        } else if (remainingDays < 3) {
+          urgency = "orange";
+        } else if (remainingDays < 7) {
+          urgency = "yellow";
+        }
+
+        item.classList.add(`deadline-${urgency}`);
+
+        // Card heading and urgency indicator
+        const heading = document.createElement("div");
+        heading.className = "deadline-card-heading";
+
+        const titleGroup = document.createElement("div");
+        titleGroup.className = "deadline-title-group";
+
+        const dot = document.createElement("span");
+        dot.className = `deadline-urgency-dot urgency-${urgency}`;
+        dot.setAttribute("aria-label", `${urgency} urgency`);
+        dot.setAttribute("role", "img");
+
+        const title = document.createElement("h3");
+        title.className = "deadline-title";
+        title.textContent = deadline.title;
+
+        titleGroup.append(dot, title);
+        heading.appendChild(titleGroup);
+
+        // Preserve the existing deadline information.
+        const details = document.createElement("div");
+        details.className = "deadline-card-details";
+
+        const description = document.createElement("p");
+        description.textContent =
+          deadline.description || "No description";
+
+        const metadata = document.createElement("p");
+        metadata.textContent =
+          `Due ${
+            Number.isNaN(dueDate.getTime())
+              ? "date unavailable"
+              : dueDate.toLocaleString()
+          } · ${deadline.time_left || ""}`;
+
+        const status = document.createElement("p");
+        status.textContent =
+          `Status: ${statusLabels[deadline.status] || deadline.status}`;
+
+        details.append(description, metadata, status);
+
+        const course = courseCache.find(
+          (entry) => entry.id === deadline.course_id
+        );
+
+        if (course) {
+          const courseLabel = document.createElement("p");
+          courseLabel.textContent =
+            `Course: ${course.course_code} — ${course.course_name}`;
+
+          details.appendChild(courseLabel);
+        }
+
+        // Card-specific actions
+        const actions = document.createElement("div");
+        actions.className = "deadline-card-actions";
+
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "btn-secondary-outline";
+        editButton.textContent = "Edit";
+        editButton.addEventListener("click", () => {
+          openDeadlineModal(deadline);
+        });
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className =
+          "btn-secondary-outline deadline-delete-btn";
+        deleteButton.textContent = "Delete";
+
+        deleteButton.addEventListener("click", async () => {
+          if (!confirm(`Delete deadline "${deadline.title}"?`)) return;
+
+          deleteButton.disabled = true;
+
+          try {
+            const deleteResponse = await fetch(
+              `/api/deadlines/${encodeURIComponent(deadline.id)}`,
+              { method: "DELETE" }
+            );
+
+            const result = await deleteResponse.json();
+
+            if (!deleteResponse.ok) {
+              throw new Error(
+                result.detail || "Failed to delete deadline."
+              );
+            }
+
+            showToast("Deadline deleted successfully!");
+            await loadDeadlines();
+          } catch (error) {
+            console.error("Deadline deletion failed:", error);
+            showToast(error.message || "Unable to delete deadline.");
+            deleteButton.disabled = false;
+          }
+        });
+
+        actions.append(editButton, deleteButton);
+        item.append(heading, details, actions);
+        deadlineList.appendChild(item);
+      });
+    } catch (error) {
+      console.error("Deadline loading failed:", error);
+      showToast(error.message || "Unable to load deadlines.");
+    }
+  }
+
+
+  // Load dashboard data on startup.
+  loadCourses().then(() => loadDeadlines());
   loadCourseOptions();
   loadDocuments();
   loadStorageUsage();
