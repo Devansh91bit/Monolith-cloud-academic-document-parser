@@ -1,3 +1,4 @@
+
 document.addEventListener("DOMContentLoaded", () => {
   const toast = document.getElementById("toast");
   let toastTimeout;
@@ -14,6 +15,51 @@ document.addEventListener("DOMContentLoaded", () => {
       toast.classList.remove("visible");
     }, 4000);
   };
+
+  // Global dashboard search
+  const globalSearchInput = document.getElementById("globalSearchInput");
+  const searchStatus = document.createElement("p");
+
+  searchStatus.textContent = "No matching results.";
+  searchStatus.hidden = true;
+  searchStatus.setAttribute("role", "status");
+
+  globalSearchInput?.parentElement?.insertAdjacentElement(
+    "afterend",
+    searchStatus
+  );
+
+  function applyGlobalSearch() {
+    if (!globalSearchInput) return;
+
+    const query = globalSearchInput.value.trim().toLowerCase();
+
+    const selectors = [
+      "#courseList .course-card",
+      "#deadlineList .deadline-card",
+      "#docList .document-card",
+    ];
+
+    let totalCards = 0;
+    let matchingCards = 0;
+
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((card) => {
+        totalCards++;
+
+        const matches = card.textContent.toLowerCase().includes(query);
+
+        card.style.display = matches ? "" : "none";
+
+        if (matches) matchingCards++;
+      });
+    });
+
+    searchStatus.hidden =
+      !query || totalCards === 0 || matchingCards > 0;
+  }
+
+  globalSearchInput?.addEventListener("input", applyGlobalSearch);
 
   // Logout
   const logoutBtn = document.getElementById("logoutBtn");
@@ -127,6 +173,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (data.courses.length === 0) {
         coursesEmpty.classList.remove("hidden");
+        applyGlobalSearch();
         return;
       }
 
@@ -166,6 +213,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         courseList.appendChild(card);
       });
+
+      applyGlobalSearch();
     } catch (error) {
       console.error("Course loading failed:", error);
       showToast("Unable to load courses.");
@@ -434,6 +483,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (data.documents.length === 0) {
         docsEmpty.classList.remove("hidden");
+        applyGlobalSearch();
         return;
       }
 
@@ -441,6 +491,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       data.documents.forEach((doc) => {
         const item = document.createElement("li");
+        item.className = "document-card";
+
         const details = document.createElement("div");
 
         const filename = document.createElement("strong");
@@ -455,15 +507,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Show saved parsed results after every page load.
         if (doc.is_parsed && doc.parsed_data) {
-          renderParsedData(
-            details,
-            doc.parsed_data,
-            doc.parsed_at
-          );
+          renderParsedData(details, doc.parsed_data, doc.parsed_at);
         }
 
-        // Show Parse only if no result exists in MongoDB.
+        // Show Parse only if no saved result exists.
         let parseButton = null;
+
         if (!doc.is_parsed) {
           parseButton = document.createElement("button");
           parseButton.className = "btn-secondary-outline";
@@ -498,6 +547,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 result.parsed_at || new Date().toISOString()
               );
 
+              applyGlobalSearch();
               showToast("Document parsed successfully.");
             } catch (error) {
               console.error("Document parsing failed:", error);
@@ -564,12 +614,13 @@ document.addEventListener("DOMContentLoaded", () => {
         item.append(openLink, deleteButton);
         docList.appendChild(item);
       });
+
+      applyGlobalSearch();
     } catch (error) {
       console.error("Document loading failed:", error);
       showToast("Unable to load documents.");
     }
   }
-
 
   // Load storage usage
   async function loadStorageUsage() {
@@ -774,7 +825,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return localDate.toISOString().slice(0, 16);
   }
 
-  // The existing single Quick Add Task button opens the modal.
+  // Open the existing Quick Add Task modal.
   document
     .getElementById("createDeadlineModalBtn")
     ?.addEventListener("click", () => {
@@ -851,7 +902,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  
   // Load and render deadlines as individual cards.
   async function loadDeadlines() {
     const deadlineList = document.getElementById("deadlineList");
@@ -871,6 +921,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!data.deadlines || data.deadlines.length === 0) {
         deadlinesEmpty.classList.remove("hidden");
+        applyGlobalSearch();
         return;
       }
 
@@ -922,7 +973,7 @@ document.addEventListener("DOMContentLoaded", () => {
         titleGroup.append(dot, title);
         heading.appendChild(titleGroup);
 
-        // Preserve the existing deadline information.
+        // Deadline information
         const details = document.createElement("div");
         details.className = "deadline-card-details";
 
@@ -1006,12 +1057,13 @@ document.addEventListener("DOMContentLoaded", () => {
         item.append(heading, details, actions);
         deadlineList.appendChild(item);
       });
+
+      applyGlobalSearch();
     } catch (error) {
       console.error("Deadline loading failed:", error);
       showToast(error.message || "Unable to load deadlines.");
     }
   }
-
 
   // Load dashboard data on startup.
   loadCourses().then(() => loadDeadlines());
