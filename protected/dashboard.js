@@ -346,6 +346,82 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!docList || !docsEmpty) return;
 
+    function renderParsedData(details, parsedData, parsedAt) {
+      const section = document.createElement("div");
+      section.className = "parsed-results";
+
+      const heading = document.createElement("strong");
+      heading.textContent = "Parsed Results";
+
+      const parsedDate = document.createElement("p");
+      parsedDate.textContent =
+        `Parsed ${new Date(parsedAt).toLocaleString()}`;
+
+      const summaryHeading = document.createElement("strong");
+      summaryHeading.textContent = "Summary";
+
+      const summary = document.createElement("p");
+      summary.textContent = parsedData.summary;
+
+      section.append(heading, parsedDate, summaryHeading, summary);
+
+      const coursesHeading = document.createElement("strong");
+      coursesHeading.textContent = "Courses";
+      section.appendChild(coursesHeading);
+
+      if (parsedData.courses.length) {
+        const coursesList = document.createElement("ul");
+
+        parsedData.courses.forEach((course) => {
+          const li = document.createElement("li");
+          li.textContent = course;
+          coursesList.appendChild(li);
+        });
+
+        section.appendChild(coursesList);
+      } else {
+        const noCourses = document.createElement("p");
+        noCourses.textContent = "No courses identified.";
+        section.appendChild(noCourses);
+      }
+
+      const deadlinesHeading = document.createElement("strong");
+      deadlinesHeading.textContent = "Deadlines";
+      section.appendChild(deadlinesHeading);
+
+      if (parsedData.deadlines.length) {
+        const deadlinesList = document.createElement("ul");
+
+        parsedData.deadlines.forEach((deadline) => {
+          const li = document.createElement("li");
+
+          const title = document.createElement("strong");
+          title.textContent = deadline.title;
+
+          const dueDate = document.createElement("p");
+          dueDate.textContent = deadline.due_date
+            ? `Due: ${deadline.due_date}`
+            : "Due date: Not identified";
+
+          const evidence = document.createElement("p");
+          evidence.textContent = deadline.evidence
+            ? `Evidence: ${deadline.evidence}`
+            : "No supporting text provided.";
+
+          li.append(title, dueDate, evidence);
+          deadlinesList.appendChild(li);
+        });
+
+        section.appendChild(deadlinesList);
+      } else {
+        const noDeadlines = document.createElement("p");
+        noDeadlines.textContent = "No deadlines identified.";
+        section.appendChild(noDeadlines);
+      }
+
+      details.appendChild(section);
+    }
+
     try {
       const response = await fetch("/api/documents");
 
@@ -376,6 +452,61 @@ document.addEventListener("DOMContentLoaded", () => {
           `Uploaded ${new Date(doc.uploaded_at).toLocaleDateString()}`;
 
         details.append(filename, metadata);
+
+        // Show saved parsed results after every page load.
+        if (doc.is_parsed && doc.parsed_data) {
+          renderParsedData(
+            details,
+            doc.parsed_data,
+            doc.parsed_at
+          );
+        }
+
+        // Show Parse only if no result exists in MongoDB.
+        let parseButton = null;
+        if (!doc.is_parsed) {
+          parseButton = document.createElement("button");
+          parseButton.className = "btn-secondary-outline";
+          parseButton.textContent = "Parse";
+          parseButton.type = "button";
+          parseButton.setAttribute(
+            "aria-label",
+            `Parse ${doc.filename}`
+          );
+
+          parseButton.addEventListener("click", async () => {
+            parseButton.disabled = true;
+            parseButton.textContent = "Parsing…";
+
+            try {
+              const response = await fetch(
+                `/api/documents/${encodeURIComponent(doc.id)}/parse`,
+                { method: "POST" }
+              );
+
+              if (!response.ok) {
+                throw new Error("Failed to parse document.");
+              }
+
+              const result = await response.json();
+
+              parseButton.remove();
+
+              renderParsedData(
+                details,
+                result.parsed_data,
+                result.parsed_at || new Date().toISOString()
+              );
+
+              showToast("Document parsed successfully.");
+            } catch (error) {
+              console.error("Document parsing failed:", error);
+              parseButton.disabled = false;
+              parseButton.textContent = "Parse";
+              showToast("Unable to parse document.");
+            }
+          });
+        }
 
         const openLink = document.createElement("a");
         openLink.className = "btn-secondary-outline";
@@ -424,7 +555,13 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         });
 
-        item.append(details, openLink, deleteButton);
+        item.append(details);
+
+        if (parseButton) {
+          item.appendChild(parseButton);
+        }
+
+        item.append(openLink, deleteButton);
         docList.appendChild(item);
       });
     } catch (error) {
@@ -432,6 +569,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Unable to load documents.");
     }
   }
+
 
   // Load storage usage
   async function loadStorageUsage() {

@@ -1,5 +1,7 @@
 
 import os
+import shutil
+import tempfile
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -27,12 +29,13 @@ from starlette.middleware.sessions import SessionMiddleware
 from database import create_mongodb_client, DATABASE_NAME
 from models import CourseCreate, DeadlineCreate
 from storage import upload_file, download_file, delete_file
+from parser import parse_document
 
 
 load_dotenv()
 
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MiB
-MAX_STORAGE_SIZE = 500 * 1024 * 1024  # 500 MiB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+MAX_STORAGE_SIZE = 500 * 1024 * 1024  # 500 MB
 
 ALLOWED_FILE_TYPES = {
     ".pdf": "application/pdf",
@@ -56,6 +59,7 @@ async def lifespan(app: FastAPI):
         app.state.documents_collection = app.state.db["documents"]
         app.state.deadlines_collection = app.state.db["deadlines"]
         app.state.storage_usage_collection = app.state.db["storage_usage"]
+        app.state.parsed_documents_collection = app.state.db["parsed_documents"]
 
         await client.admin.command("ping")
 
@@ -69,6 +73,12 @@ async def lifespan(app: FastAPI):
             [("user_id", 1)],
             unique=True,
             name="unique_user_storage_usage",
+        )
+
+        await app.state.parsed_documents_collection.create_index(
+            [("user_id", 1), ("document_id", 1)],
+            unique=True,
+            name="unique_user_parsed_document",
         )
 
         yield
@@ -612,14 +622,37 @@ async def get_documents(request: Request):
         documents = await request.app.state.documents_collection.find(
             {"user_id": user["sub"]}
         ).to_list(length=None)
+
+        parsed_documents = await (
+            request.app.state.parsed_documents_collection.find(
+                {"user_id": user["sub"]}
+            ).to_list(length=None)
+        )
+
     except PyMongoError:
         raise HTTPException(
             status_code=500,
             detail="Unable to retrieve documents. Please try again.",
         )
 
+    parsed_by_document_id = {
+        parsed["document_id"]: parsed
+        for parsed in parsed_documents
+    }
+
     for document in documents:
-        document["id"] = str(document.pop("_id"))
+        document_id = str(document.pop("_id"))
+        document["id"] = document_id
+
+        parsed = parsed_by_document_id.get(document_id)
+
+        document["is_parsed"] = parsed is not None
+        document["parsed_data"] = (
+            parsed["parsed_data"] if parsed else None
+        )
+        document["parsed_at"] = (
+            parsed["parsed_at"] if parsed else None
+        )
 
     return {"documents": documents}
 
@@ -675,6 +708,142 @@ async def download_document(document_id: str, request: Request):
         background=BackgroundTask(file_stream.close),
     )
 
+@app.post("/api/documents/{document_id}/parse")
+async def parse_uploaded_document(document_id: str, request: Request):
+    user = get_user(request)
+
+    if not ObjectId.is_valid(document_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid document ID.",
+        )
+
+    try:
+        document = await request.app.state.documents_collection.find_one(
+            {
+                "_id": ObjectId(document_id),
+                "user_id": user["sub"],
+            }
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve document metadata.",
+        )
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
+        )
+
+    filename = os.path.basename(document["filename"])
+
+    # Return previously parsed results without spending credits.
+    try:
+        saved_result = (
+            await request.app.state.parsed_documents_collection.find_one(
+                {
+                    "user_id": user["sub"],
+                    "document_id": document_id,
+                }
+            )
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve previously parsed results.",
+        )
+
+    if saved_result:
+        return {
+            "document_id": document_id,
+            "filename": filename,
+            "parsed_data": saved_result["parsed_data"],
+        }
+
+    extension = os.path.splitext(filename)[1].lower()
+
+    if extension not in ALLOWED_FILE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported document format.",
+        )
+
+    try:
+        file_stream = await run_in_threadpool(
+            download_file, document["object_key"]
+        )
+    except (ClientError, BotoCoreError):
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to retrieve the document from storage.",
+        )
+
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=extension,
+            delete=False,
+        ) as temp_file:
+            temp_path = temp_file.name
+            await run_in_threadpool(
+                shutil.copyfileobj,
+                file_stream,
+                temp_file,
+            )
+
+        parsed_result = await run_in_threadpool(
+            parse_document,
+            temp_path,
+        )
+
+        parsed_document = {
+            "user_id": user["sub"],
+            "document_id": document_id,
+            "filename": filename,
+            "parsed_data": parsed_result,
+            "parsed_at": datetime.now(timezone.utc),
+        }
+
+        await request.app.state.parsed_documents_collection.insert_one(
+            parsed_document
+        )
+
+        return {
+            "document_id": document_id,
+            "filename": filename,
+            "parsed_data": parsed_result,
+        }
+
+    except HTTPException:
+        raise
+
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to save the parsed results.",
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Unable to parse the document. "
+                "Please check the file format and try again."
+            ),
+        ) from exc
+
+    finally:
+        file_stream.close()
+
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
 
 @app.delete("/api/documents/{document_id}")
 async def delete_document(document_id: str, request: Request):
@@ -687,6 +856,7 @@ async def delete_document(document_id: str, request: Request):
         )
 
     documents = request.app.state.documents_collection
+    parsed_documents = request.app.state.parsed_documents_collection
     storage_usage = request.app.state.storage_usage_collection
 
     try:
@@ -730,6 +900,14 @@ async def delete_document(document_id: str, request: Request):
                 status_code=404,
                 detail="Document metadata not found.",
             )
+
+        await parsed_documents.delete_one(
+            {
+                "user_id": user["sub"],
+                "document_id": document_id,
+            },
+            session=session,
+        )
 
         usage_result = await storage_usage.update_one(
             {
@@ -797,3 +975,4 @@ async def dashboard_js(request: Request):
 
 
 app.mount("/", StaticFiles(directory="public", html=True), name="public")
+ 
