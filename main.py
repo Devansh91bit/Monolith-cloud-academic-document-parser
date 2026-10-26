@@ -1,9 +1,10 @@
 
 import os
+import re
 import shutil
 import tempfile
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from tempfile import SpooledTemporaryFile
 
@@ -79,6 +80,13 @@ async def lifespan(app: FastAPI):
             [("user_id", 1), ("document_id", 1)],
             unique=True,
             name="unique_user_parsed_document",
+        )
+
+        await app.state.deadlines_collection.create_index(
+            [("user_id", 1), ("source_candidate_key", 1)],
+            unique=True,
+            partialFilterExpression={"source_candidate_key": {"$exists": True}},
+            name="unique_user_parsed_deadline_candidate",
         )
 
         yield
@@ -274,6 +282,162 @@ async def create_deadline(deadline: DeadlineCreate, request: Request):
     return {
         "message": "Deadline created successfully.",
         "deadline_id": str(result.inserted_id),
+    }
+
+
+@app.post("/api/documents/{document_id}/deadlines", status_code=200)
+async def add_parsed_deadlines(document_id: str, request: Request):
+    user = get_user(request)
+
+    if not ObjectId.is_valid(document_id):
+        raise HTTPException(status_code=400, detail="Invalid document ID.")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+
+    selected_indices = payload.get("selected_indices")
+    course_id = payload.get("course_id")
+
+    if (
+        not isinstance(selected_indices, list)
+        or not selected_indices
+        or any(type(index) is not int or index < 0 for index in selected_indices)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Select at least one valid parsed deadline.",
+        )
+
+    selected_indices = list(dict.fromkeys(selected_indices))
+
+    if course_id:
+        if not isinstance(course_id, str) or not ObjectId.is_valid(course_id):
+            raise HTTPException(status_code=400, detail="Invalid course ID.")
+
+        try:
+            course = await request.app.state.courses_collection.find_one(
+                {"_id": ObjectId(course_id), "user_id": user["sub"]},
+                {"_id": 1},
+            )
+        except PyMongoError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to validate the course. Please try again.",
+            ) from exc
+
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found.")
+
+    try:
+        parsed_document = await request.app.state.parsed_documents_collection.find_one(
+            {"user_id": user["sub"], "document_id": document_id}
+        )
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve parsed results.",
+        ) from exc
+
+    if not parsed_document:
+        raise HTTPException(status_code=404, detail="Parsed document not found.")
+
+    candidates = parsed_document.get("parsed_data", {}).get("deadlines", [])
+    if any(index >= len(candidates) for index in selected_indices):
+        raise HTTPException(
+            status_code=400,
+            detail="One or more selected deadlines do not exist in the parsed result.",
+        )
+
+    added_indices = set(parsed_document.get("added_deadline_indices", []))
+    added = []
+    already_added = []
+    failed = []
+
+    for index in selected_indices:
+        candidate = candidates[index]
+        title = candidate.get("title")
+        due_date = candidate.get("due_date")
+
+        if not isinstance(title, str) or not title.strip():
+            failed.append({"index": index, "reason": "Deadline title is missing."})
+            continue
+
+        try:
+            parsed_date = datetime.strptime(due_date, "%Y-%m-%d").date()
+            if parsed_date.isoformat() != due_date:
+                raise ValueError
+        except (TypeError, ValueError):
+            failed.append({"index": index, "reason": "A valid due date is required."})
+            continue
+
+        if index in added_indices:
+            already_added.append(index)
+            continue
+
+        due_start = datetime(
+            parsed_date.year, parsed_date.month, parsed_date.day,
+            tzinfo=timezone.utc,
+        )
+        due_end = due_start + timedelta(days=1)
+        source_key = f"{document_id}:{index}"
+
+        try:
+            # Also avoid duplicates that already exist as ordinary deadlines.
+            existing = await request.app.state.deadlines_collection.find_one(
+                {
+                    "user_id": user["sub"],
+                    "title": {"$regex": "^" + re.escape(title.strip()) + "$", "$options": "i"},
+                    "due_at": {"$gte": due_start, "$lt": due_end},
+                },
+                {"_id": 1},
+            )
+
+            if existing:
+                await request.app.state.parsed_documents_collection.update_one(
+                    {"_id": parsed_document["_id"], "user_id": user["sub"]},
+                    {"$addToSet": {"added_deadline_indices": index}},
+                )
+                added_indices.add(index)
+                already_added.append(index)
+                continue
+
+            deadline_data = {
+                "user_id": user["sub"],
+                "title": title.strip(),
+                "description": candidate.get("evidence") or "",
+                "due_at": due_end - timedelta(seconds=1),
+                "course_id": course_id or None,
+                "status": "not_started",
+                "created_at": datetime.now(timezone.utc),
+                "source_candidate_key": source_key,
+            }
+
+            await request.app.state.deadlines_collection.insert_one(deadline_data)
+            await request.app.state.parsed_documents_collection.update_one(
+                {"_id": parsed_document["_id"], "user_id": user["sub"]},
+                {"$addToSet": {"added_deadline_indices": index}},
+            )
+            added_indices.add(index)
+            added.append(index)
+
+        except DuplicateKeyError:
+            await request.app.state.parsed_documents_collection.update_one(
+                {"_id": parsed_document["_id"], "user_id": user["sub"]},
+                {"$addToSet": {"added_deadline_indices": index}},
+            )
+            added_indices.add(index)
+            already_added.append(index)
+        except PyMongoError:
+            failed.append({"index": index, "reason": "Unable to save this deadline."})
+
+    return {
+        "message": "Parsed deadlines processed.",
+        "added_indices": added,
+        "already_added_indices": already_added,
+        "failed": failed,
+        "added_deadline_indices": sorted(added_indices),
     }
 
 
@@ -652,6 +816,9 @@ async def get_documents(request: Request):
         )
         document["parsed_at"] = (
             parsed["parsed_at"] if parsed else None
+        )
+        document["added_deadline_indices"] = (
+            parsed.get("added_deadline_indices", []) if parsed else []
         )
 
     return {"documents": documents}

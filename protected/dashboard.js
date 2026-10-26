@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", () => {
   const toast = document.getElementById("toast");
   let toastTimeout;
@@ -48,7 +47,6 @@ document.addEventListener("DOMContentLoaded", () => {
         totalCards++;
 
         const matches = card.textContent.toLowerCase().includes(query);
-
         card.style.display = matches ? "" : "none";
 
         if (matches) matchingCards++;
@@ -62,9 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
   globalSearchInput?.addEventListener("input", applyGlobalSearch);
 
   // Logout
-  const logoutBtn = document.getElementById("logoutBtn");
-
-  logoutBtn?.addEventListener("click", () => {
+  document.getElementById("logoutBtn")?.addEventListener("click", () => {
     window.location.href = "/auth/logout";
   });
 
@@ -129,9 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const response = await fetch("/api/courses", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(courseData),
       });
 
@@ -332,7 +326,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Upload document; FastAPI stores the file in Backblaze B2.
+  // Upload document
   confirmUploadBtn?.addEventListener("click", async () => {
     const file = fileInput?.files[0];
 
@@ -395,7 +389,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!docList || !docsEmpty) return;
 
-    function renderParsedData(details, parsedData, parsedAt) {
+    function renderParsedData(
+      details,
+      parsedData,
+      parsedAt,
+      documentId,
+      addedDeadlineIndices = []
+    ) {
       const section = document.createElement("div");
       section.className = "parsed-results";
 
@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
       summaryHeading.textContent = "Summary";
 
       const summary = document.createElement("p");
-      summary.textContent = parsedData.summary;
+      summary.textContent = parsedData.summary || "";
 
       section.append(heading, parsedDate, summaryHeading, summary);
 
@@ -418,10 +418,14 @@ document.addEventListener("DOMContentLoaded", () => {
       coursesHeading.textContent = "Courses";
       section.appendChild(coursesHeading);
 
-      if (parsedData.courses.length) {
+      const courses = Array.isArray(parsedData.courses)
+        ? parsedData.courses
+        : [];
+
+      if (courses.length) {
         const coursesList = document.createElement("ul");
 
-        parsedData.courses.forEach((course) => {
+        courses.forEach((course) => {
           const li = document.createElement("li");
           li.textContent = course;
           coursesList.appendChild(li);
@@ -438,34 +442,326 @@ document.addEventListener("DOMContentLoaded", () => {
       deadlinesHeading.textContent = "Deadlines";
       section.appendChild(deadlinesHeading);
 
-      if (parsedData.deadlines.length) {
-        const deadlinesList = document.createElement("ul");
+      const deadlines = Array.isArray(parsedData.deadlines)
+        ? parsedData.deadlines
+        : [];
 
-        parsedData.deadlines.forEach((deadline) => {
-          const li = document.createElement("li");
-
-          const title = document.createElement("strong");
-          title.textContent = deadline.title;
-
-          const dueDate = document.createElement("p");
-          dueDate.textContent = deadline.due_date
-            ? `Due: ${deadline.due_date}`
-            : "Due date: Not identified";
-
-          const evidence = document.createElement("p");
-          evidence.textContent = deadline.evidence
-            ? `Evidence: ${deadline.evidence}`
-            : "No supporting text provided.";
-
-          li.append(title, dueDate, evidence);
-          deadlinesList.appendChild(li);
-        });
-
-        section.appendChild(deadlinesList);
-      } else {
+      if (!deadlines.length) {
         const noDeadlines = document.createElement("p");
         noDeadlines.textContent = "No deadlines identified.";
         section.appendChild(noDeadlines);
+        details.appendChild(section);
+        return;
+      }
+
+      const deadlinesList = document.createElement("ul");
+
+      deadlines.forEach((deadline) => {
+        const li = document.createElement("li");
+
+        const title = document.createElement("strong");
+        title.textContent = deadline.title || "Untitled deadline";
+
+        const dueDate = document.createElement("p");
+        dueDate.textContent = deadline.due_date
+          ? `Due: ${deadline.due_date}`
+          : "Due date: Not identified";
+
+        const evidence = document.createElement("p");
+        evidence.textContent = deadline.evidence
+          ? `Evidence: ${deadline.evidence}`
+          : "No supporting text provided.";
+
+        li.append(title, dueDate, evidence);
+        deadlinesList.appendChild(li);
+      });
+
+      section.appendChild(deadlinesList);
+
+      const addedIndices = new Set(
+        Array.isArray(addedDeadlineIndices) ? addedDeadlineIndices : []
+      );
+
+      const isValidDate = (value) => {
+        if (
+          typeof value !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(value)
+        ) {
+          return false;
+        }
+
+        const parsed = new Date(`${value}T00:00:00Z`);
+
+        return (
+          !Number.isNaN(parsed.getTime()) &&
+          parsed.toISOString().slice(0, 10) === value
+        );
+      };
+
+      const selectableCandidates = deadlines
+        .map((deadline, index) => ({ deadline, index }))
+        .filter(({ deadline, index }) =>
+          !addedIndices.has(index) &&
+          isValidDate(deadline.due_date) &&
+          typeof deadline.title === "string" &&
+          deadline.title.trim().length > 0
+        );
+
+      // Show the action only when eligible candidates remain.
+      if (selectableCandidates.length > 0) {
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.className =
+          "btn-secondary-outline parsed-deadline-toggle";
+        addButton.textContent = "Add to Deadlines";
+        addButton.setAttribute("aria-expanded", "false");
+
+        // Nested selection card
+        const panel = document.createElement("div");
+        panel.className = "parsed-deadline-selection";
+        panel.hidden = true;
+
+        const panelHeader = document.createElement("div");
+        panelHeader.className = "parsed-deadline-selection-header";
+
+        const panelHeading = document.createElement("strong");
+        panelHeading.className = "parsed-deadline-selection-title";
+        panelHeading.textContent = "Add deadlines";
+
+        const panelDescription = document.createElement("p");
+        panelDescription.className =
+          "parsed-deadline-selection-description";
+        panelDescription.textContent =
+          "Choose the deadlines you want to save. You can optionally assign them to a course.";
+
+        panelHeader.append(panelHeading, panelDescription);
+
+        // Optional course field
+        const courseField = document.createElement("div");
+        courseField.className = "parsed-deadline-course-field";
+
+        const courseLabel = document.createElement("label");
+        courseLabel.textContent = "Course (optional)";
+        courseLabel.className = "parsed-deadline-field-label";
+
+        const courseSelect = document.createElement("select");
+        courseSelect.className = "parsed-deadline-course-select";
+        courseSelect.appendChild(new Option("No course", ""));
+
+        courseLabel.htmlFor = `parsed-deadline-course-${documentId}`;
+        courseSelect.id = `parsed-deadline-course-${documentId}`;
+
+        courseField.append(courseLabel, courseSelect);
+
+        // Selectable candidate list
+        const candidateList = document.createElement("div");
+        candidateList.className = "parsed-deadline-candidates";
+
+        const message = document.createElement("p");
+        message.className = "parsed-deadline-message";
+        message.setAttribute("role", "status");
+
+        // Both buttons are inside the nested card.
+        const confirmButton = document.createElement("button");
+        confirmButton.type = "button";
+        confirmButton.className = "btn-secondary-outline";
+        confirmButton.textContent = "Add Selected";
+
+        const cancelButton = document.createElement("button");
+        cancelButton.type = "button";
+        cancelButton.className = "btn-secondary-outline";
+        cancelButton.textContent = "Cancel";
+
+        const actions = document.createElement("div");
+        actions.className = "parsed-deadline-actions";
+        actions.append(confirmButton, cancelButton);
+
+        panel.append(
+          panelHeader,
+          courseField,
+          candidateList,
+          message,
+          actions
+        );
+
+        const checkboxes = new Map();
+
+        selectableCandidates.forEach(({ deadline, index }) => {
+          const label = document.createElement("label");
+          label.className = "parsed-deadline-option";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = String(index);
+
+          const optionContent = document.createElement("span");
+          optionContent.className = "parsed-deadline-option-content";
+
+          const optionTitle = document.createElement("strong");
+          optionTitle.className = "parsed-deadline-option-title";
+          optionTitle.textContent = deadline.title;
+
+          const optionDate = document.createElement("span");
+          optionDate.className = "parsed-deadline-option-date";
+          optionDate.textContent = `Due ${deadline.due_date}`;
+
+          optionContent.append(optionTitle, optionDate);
+          label.append(checkbox, optionContent);
+          candidateList.appendChild(label);
+
+          checkboxes.set(index, checkbox);
+        });
+
+        // Toggle the nested card open/closed.
+        addButton.addEventListener("click", async () => {
+          panel.hidden = !panel.hidden;
+          addButton.setAttribute("aria-expanded", String(!panel.hidden));
+
+          if (panel.hidden) return;
+
+          message.textContent = "";
+
+          try {
+            const response = await fetch("/api/courses");
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(data.detail || "Failed to load courses.");
+            }
+
+            const previousValue = courseSelect.value;
+
+            courseSelect.replaceChildren(
+              new Option("No course", "")
+            );
+
+            (Array.isArray(data.courses) ? data.courses : []).forEach(
+              (course) => {
+                courseSelect.appendChild(
+                  new Option(
+                    `${course.course_code} — ${course.course_name}`,
+                    course.id
+                  )
+                );
+              }
+            );
+
+            courseSelect.value = previousValue;
+          } catch (error) {
+            console.error("Course options loading failed:", error);
+            message.textContent =
+              "Unable to load courses. You can still add deadlines without a course.";
+          }
+        });
+
+        // Cancel closes the nested card without changing anything.
+        cancelButton.addEventListener("click", () => {
+          panel.hidden = true;
+          addButton.setAttribute("aria-expanded", "false");
+          message.textContent = "";
+        });
+
+        // Add selected candidates through the backend endpoint.
+        confirmButton.addEventListener("click", async () => {
+          const selectedIndices = [...checkboxes.entries()]
+            .filter(([, checkbox]) => checkbox.checked)
+            .map(([index]) => index);
+
+          if (!selectedIndices.length) {
+            message.textContent = "Select at least one deadline to add.";
+            return;
+          }
+
+          confirmButton.disabled = true;
+          addButton.disabled = true;
+          message.textContent = "Adding selected deadlines…";
+
+          try {
+            const response = await fetch(
+              `/api/documents/${encodeURIComponent(documentId)}/deadlines`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  selected_indices: selectedIndices,
+                  course_id: courseSelect.value || null,
+                }),
+              }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                result.detail || "Unable to add selected deadlines."
+              );
+            }
+
+            const newlyAdded = Array.isArray(result.added_indices)
+              ? result.added_indices
+              : [];
+
+            const alreadyAdded = Array.isArray(result.already_added_indices)
+              ? result.already_added_indices
+              : [];
+
+            const failed = Array.isArray(result.failed)
+              ? result.failed
+              : [];
+
+            [...new Set([...newlyAdded, ...alreadyAdded])].forEach(
+              (index) => {
+                addedIndices.add(index);
+                checkboxes.get(index)?.closest("label")?.remove();
+                checkboxes.delete(index);
+              }
+            );
+
+            if (newlyAdded.length > 0) {
+              await loadDeadlines();
+            }
+
+            if (failed.length > 0) {
+              const reasons = failed
+                .map((item) => item.reason)
+                .filter(Boolean);
+
+              message.textContent =
+                `${newlyAdded.length} added; ${failed.length} could not be added.` +
+                (reasons.length ? ` ${reasons.join(" ")}` : "");
+
+              showToast("Some parsed deadlines could not be added.");
+            } else {
+              message.textContent =
+                newlyAdded.length > 0
+                  ? `${newlyAdded.length} deadline${newlyAdded.length === 1 ? "" : "s"} added successfully.`
+                  : "These deadlines were already present and were not duplicated.";
+
+              showToast(
+                newlyAdded.length > 0
+                  ? "Selected deadlines added successfully."
+                  : "No duplicate deadlines were added."
+              );
+            }
+
+            if (checkboxes.size === 0) {
+              panel.hidden = true;
+              addButton.remove();
+            }
+
+            applyGlobalSearch();
+          } catch (error) {
+            console.error("Adding parsed deadlines failed:", error);
+            message.textContent =
+              error.message || "Unable to add deadlines.";
+            showToast(message.textContent);
+          } finally {
+            confirmButton.disabled = false;
+            addButton.disabled = false;
+          }
+        });
+
+        section.append(addButton, panel);
       }
 
       details.appendChild(section);
@@ -505,12 +801,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
         details.append(filename, metadata);
 
-        // Show saved parsed results after every page load.
+        // Render saved parsing results without parsing again.
         if (doc.is_parsed && doc.parsed_data) {
-          renderParsedData(details, doc.parsed_data, doc.parsed_at);
+          renderParsedData(
+            details,
+            doc.parsed_data,
+            doc.parsed_at,
+            doc.id,
+            doc.added_deadline_indices || []
+          );
         }
 
-        // Show Parse only if no saved result exists.
+        // Only show Parse when no saved result exists.
         let parseButton = null;
 
         if (!doc.is_parsed) {
@@ -533,18 +835,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 { method: "POST" }
               );
 
-              if (!response.ok) {
-                throw new Error("Failed to parse document.");
-              }
-
               const result = await response.json();
+
+              if (!response.ok) {
+                throw new Error(
+                  result.detail || "Failed to parse document."
+                );
+              }
 
               parseButton.remove();
 
               renderParsedData(
                 details,
                 result.parsed_data,
-                result.parsed_at || new Date().toISOString()
+                result.parsed_at || new Date().toISOString(),
+                doc.id,
+                result.added_deadline_indices || []
               );
 
               applyGlobalSearch();
@@ -553,7 +859,7 @@ document.addEventListener("DOMContentLoaded", () => {
               console.error("Document parsing failed:", error);
               parseButton.disabled = false;
               parseButton.textContent = "Parse";
-              showToast("Unable to parse document.");
+              showToast(error.message || "Unable to parse document.");
             }
           });
         }
@@ -592,8 +898,12 @@ document.addEventListener("DOMContentLoaded", () => {
               { method: "DELETE" }
             );
 
+            const result = await response.json();
+
             if (!response.ok) {
-              throw new Error("Failed to delete document.");
+              throw new Error(
+                result.detail || "Failed to delete document."
+              );
             }
 
             showToast("Document deleted successfully.");
@@ -601,11 +911,11 @@ document.addEventListener("DOMContentLoaded", () => {
             await loadStorageUsage();
           } catch (error) {
             console.error("Document deletion failed:", error);
-            showToast("Unable to delete document.");
+            showToast(error.message || "Unable to delete document.");
           }
         });
 
-        item.append(details);
+        item.appendChild(details);
 
         if (parseButton) {
           item.appendChild(parseButton);
@@ -680,7 +990,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Deadline modal: created dynamically; dashboard.html needs no changes.
+  // Deadline modal
   const deadlineModalOverlay = document.createElement("div");
   deadlineModalOverlay.className = "modal-overlay";
   deadlineModalOverlay.id = "deadlineModalOverlay";
@@ -825,7 +1135,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return localDate.toISOString().slice(0, 16);
   }
 
-  // Open the existing Quick Add Task modal.
+  // Open the deadline modal.
   document
     .getElementById("createDeadlineModalBtn")
     ?.addEventListener("click", () => {
@@ -872,9 +1182,7 @@ document.addEventListener("DOMContentLoaded", () => {
           : "/api/deadlines",
         {
           method: isEditing ? "PUT" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(deadlineData),
         }
       );
@@ -902,7 +1210,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Load and render deadlines as individual cards.
+  // Load and render deadlines.
   async function loadDeadlines() {
     const deadlineList = document.getElementById("deadlineList");
     const deadlinesEmpty = document.getElementById("deadlinesEmpty");
@@ -933,7 +1241,6 @@ document.addEventListener("DOMContentLoaded", () => {
         completed: "Completed",
       };
 
-      // Preserve the order returned by the backend.
       data.deadlines.forEach((deadline) => {
         const item = document.createElement("li");
         item.className = "deadline-card";
@@ -954,7 +1261,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         item.classList.add(`deadline-${urgency}`);
 
-        // Card heading and urgency indicator
         const heading = document.createElement("div");
         heading.className = "deadline-card-heading";
 
@@ -973,7 +1279,6 @@ document.addEventListener("DOMContentLoaded", () => {
         titleGroup.append(dot, title);
         heading.appendChild(titleGroup);
 
-        // Deadline information
         const details = document.createElement("div");
         details.className = "deadline-card-details";
 
@@ -1007,7 +1312,6 @@ document.addEventListener("DOMContentLoaded", () => {
           details.appendChild(courseLabel);
         }
 
-        // Card-specific actions
         const actions = document.createElement("div");
         actions.className = "deadline-card-actions";
 
