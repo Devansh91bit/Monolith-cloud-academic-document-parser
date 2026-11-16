@@ -126,9 +126,8 @@ def get_user(request: Request):
 
 @app.get("/auth/login")
 async def login(request: Request):
-    return await oauth.appid.authorize_redirect(
-        request, "http://127.0.0.1:8000/auth/callback"
-    )
+    redirect_uri = str(request.url_for("auth_callback"))
+    return await oauth.appid.authorize_redirect(request, redirect_uri)
 
 
 @app.get("/auth/callback")
