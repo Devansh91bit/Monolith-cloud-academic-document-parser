@@ -1,4 +1,22 @@
 document.addEventListener("DOMContentLoaded", () => {
+  // Mobile Navbar Elements
+  const mobileToggle = document.getElementById('mobileToggle');
+  const navContainer = document.getElementById('navContainer'); 
+
+  // Handle Mobile Menu Toggle
+    if (mobileToggle && navContainer) {
+        mobileToggle.addEventListener('click', () => {
+            navContainer.classList.toggle('active');
+        });
+
+        // Close mobile drawer when clicking navigation links
+        document.querySelectorAll('.dash-nav-links a, .dash-nav-actions a').forEach(link => {
+            link.addEventListener('click', () => {
+                navContainer.classList.remove('active');
+            });
+        });
+    }
+
   const toast = document.getElementById("toast");
   let toastTimeout;
   let courseCache = [];
